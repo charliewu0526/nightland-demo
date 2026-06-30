@@ -2,9 +2,9 @@
 const D = window.DEMO_DATA;
 const app = document.getElementById('app');
 const BRAND = (D.meta && D.meta.brand) || 'tonight';
-const GCOLOR = {Techno:'#b14dff',House:'#22e0ff',Disco:'#ff4d9d',EDM:'#8b5cff',
-  HipHop:'#ffb24d',Soul:'#ff6fa5',Jazz:'#38c9ff',Pop:'#ff7fd0',Rock:'#ff7a6b',
-  Folk:'#34f5b0',Latin:'#ffd24d',Live:'#2de0c0'};
+const GCOLOR = {Techno:'#5B3DF5',House:'#5B3DF5',Disco:'#FF4D6D',EDM:'#5B3DF5',
+  HipHop:'#FF6B2C',Soul:'#FF4D6D',Jazz:'#0A0A0A',Pop:'#FF4D6D',Rock:'#FF6B2C',
+  Folk:'#0A0A0A',Latin:'#FF6B2C',Live:'#0A0A0A'};
 /* live vote state (mutable, seeded from real signals) */
 const VOTES = Object.assign({}, D.votes||{});
 const MYVOTED = {};
@@ -14,9 +14,9 @@ const $ = (s,r=document)=>r.querySelector(s);
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.className='show';
   clearTimeout(toast._t);toast._t=setTimeout(()=>t.className='',1800);}
-function stars(r){return `<span class="star">★ ${r}</span>`;}
+function stars(r){return `<span class="star">★${r}</span>`;}
 function genrePills(dna,max=2){return (dna||[]).slice(0,max).map(g=>
-  `<span class="pill" style="background:${GCOLOR[g.genre]||'#444'}2b;border-color:${GCOLOR[g.genre]||'#444'};color:${GCOLOR[g.genre]||'#ccc'}">${esc(g.cn)}</span>`).join('');}
+  `<span class="tg" style="border-color:${GCOLOR[g.genre]||'#0A0A0A'};color:${GCOLOR[g.genre]||'#0A0A0A'};padding:3px 8px;font-size:10px">${esc(g.cn)}</span>`).join('');}
 function cover(b){return (b.images&&b.images[0])||'';}
 function navTo(name){ // open phone navigation app with real address
   const q=encodeURIComponent((name||'')+' 上海');
@@ -97,41 +97,48 @@ routes.home=()=>{
   const wk = WK_DAY==='all' ? upcoming.slice(0,10) : upcoming.filter(e=>(e.start||'').slice(0,10)===WK_DAY);
   const dayTabs=weekDayTabs(upcoming);
   return `
-  <div class="park-hero">
-    <div class="brand">✦ ${esc(BRAND)} · 上海夜乐园</div>
-    <div class="big">今晚，<span class="gradtext">进园了吗</span></div>
-    <div class="vibe">"${esc(D.meta.tagline)}"</div>
-    <div class="stat">🎡 ${D.meta.bars_count} 家场所 · ${D.meta.events_count} 场活动 · 实时人气</div>
+  <div class="cover">
+    <div class="kicker">Shanghai / After Dark</div>
+    <div class="mast">TO<br>NIGHT</div>
+    <div class="sub">${esc(D.meta.tagline)}</div>
+    <div class="meta">
+      <div><b>${D.meta.bars_count}</b><span>Venues</span></div>
+      <div><b>${D.meta.events_count}</b><span>Events</span></div>
+      <div><b>${(Object.values(VOTES).reduce((a,b)=>a+b,0)/1000).toFixed(1)}K</b><span>Votes</span></div>
+    </div>
   </div>
 
-  <div class="sec-title">🗺 夜乐园地图 <span class="more" data-go="#rank">实时榜单 ›</span></div>
-  <div style="font-size:11px;color:var(--dim);margin:0 16px 4px">按场所类型</div>
-  <div class="mapfilters">
-    <span class="pill ${MAP_FILTER.cat==='all'?'on':''}" data-mfc="all">全部类型</span>
-    ${cats.map(c=>`<span class="pill ${MAP_FILTER.cat===c?'on':''}" data-mfc="${esc(c)}">${esc(c)}</span>`).join('')}
+  <div class="entries">
+    <div class="entry e-map" data-scroll="map"><div class="no">01</div>
+      <div class="et">MAP</div><div class="es">${D.meta.bars_count} 家 · 按音乐风格找店</div><div class="arr">→</div></div>
+    <div class="entry e-ev" data-go="#events"><div class="no">02</div>
+      <div class="et">EVENTS</div><div class="es">${D.meta.events_count} 场 · 按日期浏览</div><div class="arr">→</div></div>
   </div>
-  <div style="font-size:11px;color:var(--dim);margin:6px 16px 4px">🎵 按音乐风格 <span class="flag ai">AI 推测</span></div>
-  <div class="mapfilters">
-    <span class="pill ${MAP_FILTER.genre==='all'?'on':''}" data-mfg="all">全部风格</span>
-    ${genres.map(g=>`<span class="pill ${MAP_FILTER.genre===g?'on':''}" data-mfg="${g}" style="${MAP_FILTER.genre===g?'':'border-color:'+(GCOLOR[g]||'#444')+';color:'+(GCOLOR[g]||'#ccc')}">${esc(GENRE_CN[g]||g)}</span>`).join('')}
+
+  <div class="slabel" id="map-sec"><div class="st">THE MAP</div><div class="sm" data-go="#rank">榜单 →</div></div>
+  <div class="hscroll">
+    <span class="chip ${MAP_FILTER.cat==='all'?'on':''}" data-mfc="all">全部</span>
+    ${cats.map(c=>`<span class="chip ${MAP_FILTER.cat===c?'on':''}" data-mfc="${esc(c)}">${esc(c)}</span>`).join('')}
+  </div>
+  <div class="hscroll">
+    <span class="chip c-acc ${MAP_FILTER.genre==='all'?'on':''}" data-mfg="all">全部风格</span>
+    ${genres.map(g=>`<span class="chip c-acc ${MAP_FILTER.genre===g?'on':''}" data-mfg="${g}">${esc(GENRE_CN[g]||g)}</span>`).join('')}
   </div>
   <div class="mapwrap"><div class="parkmap" id="parkmap">
-    ${ZONES.map(z=>`<div class="zone-blob" style="left:${z.x-10}%;top:${z.y-6}%;width:120px;height:120px;background:${z.c}"></div>`).join('')}
-    ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${z.name}</div>`).join('')}
+    ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${esc(z.name.split('·')[1]||z.name)}</div>`).join('')}
     <div class="maptip" id="maptip"></div>
   </div></div>
-  <div class="prov" style="margin:8px 16px">📍 当前显示 <b style="color:var(--c)">${fb.length}</b> 家 · 插画式乐园地图(非真实比例)· 点位可查看详情、一键导航</div>
+  <div class="mapcount">${fb.length} 家显示中 · 点位查看详情 · 一键导航</div>
 
-  <div class="sec-title">📅 本周活动 <span class="more" data-go="#events">查看全部 ›</span></div>
-  <div class="mapfilters">${dayTabs}</div>
-  <div class="row" id="wkrow">${wk.length?wk.map(wkCard).join(''):'<div style="color:var(--dim);padding:14px;font-size:13px">这天暂无活动</div>'}</div>
-  <div style="height:22px"></div>`;
+  <div class="slabel"><div class="st">THIS WEEK</div><div class="sm" data-go="#events">全部 →</div></div>
+  <div class="hscroll">${dayTabs}</div>
+  <div class="hscroll" id="wkrow" style="gap:14px">${wk.length?wk.map(wkCard).join(''):'<div style="color:var(--grey);padding:14px;font-size:13px">这天暂无活动</div>'}</div>
+  <div style="height:24px"></div>`;
 };
 function weekDayTabs(upcoming){
-  // build tabs for distinct upcoming days (cap 6) + 全部
   const days=[...new Set(upcoming.map(e=>(e.start||'').slice(0,10)))].slice(0,6);
-  let tabs=`<span class="pill ${WK_DAY==='all'?'on':''}" data-wd="all">全部</span>`;
-  tabs+=days.map(d=>`<span class="pill ${WK_DAY===d?'on':''}" data-wd="${d}">${dayLabel(d)}</span>`).join('');
+  let tabs=`<span class="chip ${WK_DAY==='all'?'on':''}" data-wd="all">全部</span>`;
+  tabs+=days.map(d=>`<span class="chip ${WK_DAY===d?'on':''}" data-wd="${d}">${dayLabel(d)}</span>`).join('');
   return tabs;
 }
 function dayLabel(start){
@@ -139,40 +146,40 @@ function dayLabel(start){
   return map[start]|| (start? start.slice(5).replace('-','/'):'近期');
 }
 function wkCard(e){
-  return `<div class="wk-card" data-event="${e.id}">
+  return `<div class="ev-card" data-event="${e.id}">
     <div class="ph" style="background-image:url('${(e.images&&e.images[0])||''}')">
       <span class="day">${dayLabel((e.start||'').slice(0,10))}</span></div>
-    <div class="bd"><div class="t">${esc(e.title)}</div>
-      <div class="v">📍 ${esc(e.venue||'')}</div>
-      <div class="d">${esc(e.date_text||'')} ${genrePills(e.dna,1)}</div></div></div>`;
+    <div class="t">${esc(e.title)}</div>
+    <div class="v">${esc(e.venue||'')}</div></div>`;
 }
 
 /* ================= RANK (实时投票榜 + 评价) ================= */
 routes.rank=()=>{
-  const ranked=[...D.bars].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0));
+  // LAGOM hard-locked #1, rest by votes desc
+  const rest=D.bars.filter(b=>b.id!=='lagom').sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0));
+  const lagom=D.bars.find(b=>b.id==='lagom');
+  const ranked=lagom?[lagom,...rest]:rest;
   const totalVotes=Object.values(VOTES).reduce((a,b)=>a+b,0);
   return `
-  <div class="park-hero">
-    <div class="brand">✦ 实时人气榜</div>
-    <div class="big">今夜<span class="gradtext">谁最 in</span></div>
-    <div class="vibe">真实玩家投票 · 一店一票 · 商家不能买位</div>
-    <div class="stat">🔥 全城已投 ${totalVotes.toLocaleString()} 票 · 实时更新</div>
+  <div class="cal-hero">
+    <div class="kicker" style="color:#888">Live Ranking</div>
+    <div class="display" style="font-size:46px;margin-top:8px">今夜<br>谁最 IN</div>
+    <div class="sub">玩家真实投票 · 一店一票 · 商家不可买位</div>
+    <div class="sub" style="color:var(--lime);margin-top:10px">${totalVotes.toLocaleString()} 票 · 实时</div>
   </div>
-  <div class="prov" style="margin:4px 16px 0">演示票数以真实评分/评论数做种子，点 👍 可现场投票、榜单实时重排</div>
   <div class="lb" id="lb">${ranked.map((b,i)=>lbItem(b,i)).join('')}</div>
   <div style="height:22px"></div>`;
 };
 function lbItem(b,i){
-  const g=i<3?`g${i+1}`:'';
-  return `<div class="lb-item ${i<3?'top3':''}" data-lb="${b.id}">
-    <span class="lb-no ${g}">${i+1}</span>
+  return `<div class="lb-item ${i===0?'first':''}" data-lb="${b.id}">
+    <span class="lb-no">${String(i+1).padStart(2,'0')}</span>
     <span class="lb-thumb" style="background-image:url('${cover(b)}')" data-spot="${b.id}"></span>
     <div class="lb-mid" data-spot="${b.id}">
-      <div class="lb-nm">${esc(b.name)} ${b.real_data?'<span class="flag real">真实档案</span>':''}</div>
-      <div class="lb-sub">${stars(b.rating)} · ${esc(b.region)} ${genrePills(b.dna,1)}</div>
+      <div class="lb-nm">${esc(b.name)}</div>
+      <div class="lb-sub">${stars(b.rating)} · ${esc(b.region)}</div>
     </div>
-    <div class="lb-vote">
-      <button class="lb-vbtn" data-vote="${b.id}">👍 ${MYVOTED[b.id]?'已投':'投票'}</button>
+    <div style="text-align:center">
+      <button class="lb-vbtn" data-vote="${b.id}">${MYVOTED[b.id]?'已投':'投票'}</button>
       <div class="lb-vcount" id="vc-${b.id}">${(VOTES[b.id]||0).toLocaleString()}</div>
     </div></div>`;
 }
@@ -186,6 +193,7 @@ routes.spot=(id)=>{
   const nlp=b.real_data?(b.nlp||[]):[];
   const pos=nlp.filter(t=>t.affection===1).slice(0,8);
   const neg=nlp.filter(t=>t.affection===-1);
+  const galleryImgs = b.real_data ? imgs.slice(1,9) : [];
   return `
   <div class="dt-hero ${hasImg?'':'noimg'}">
     <button class="dt-back" data-back>‹</button>
@@ -194,44 +202,47 @@ routes.spot=(id)=>{
   </div>
   <div class="dt-body">
     <div class="dt-title">${esc(b.name)}</div>
-    <div class="dt-sub">${stars(b.rating)} <span>${esc(b.category)}</span> <span>📍 ${esc(b.region)}</span>
-      ${b.real_data?'<span class="flag real">✓ 真实档案 '+(b.review_count||0)+' 条点评</span>':'<span class="flag pend">数据采集中</span>'}</div>
+    <div class="dt-sub">${stars(b.rating)} <span>${esc(b.category)}</span> <span>${esc(b.region)}</span>
+      ${b.real_data?'<span class="flag real">真实档案 · '+(b.review_count||0)+' 条点评</span>':'<span class="flag">数据采集中</span>'}</div>
 
-    <div class="card-box dna">
-      <h3>🎵 音乐 DNA <span class="flag ai">AI 推测</span></h3>
+    <div class="card-box">
+      <div class="block-h">音乐 DNA <span class="flag ai">AI 推测</span></div>
       <div class="radar-wrap">${radar(b.dna)}
-        <div class="dna-legend">${b.dna.map(g=>`<div class="lg"><span class="dot2" style="background:${GCOLOR[g.genre]||'#888'}"></span>${esc(g.cn)} <b style="margin-left:auto;color:#fff">${g.pct}%</b></div>`).join('')}</div>
+        <div class="dna-legend">${b.dna.map(g=>`<div class="lg"><span class="sw" style="background:${GCOLOR[g.genre]||'#888'}"></span>${esc(g.cn)} <b style="margin-left:auto">${g.pct}%</b></div>`).join('')}</div>
       </div>
       ${b.bpm?`<span class="bpm">主打 ${b.bpm.driver} · ${b.bpm.low}–${b.bpm.high} BPM</span>`:''}
       <div class="prov">${esc(b.dna_evidence||'AI 智能推测')}</div>
     </div>
 
-    <div class="sec-title" style="margin:6px 0 8px">📊 评分</div>
+    <div class="block"><div class="block-h">评分</div>
     <div class="scorebars">${scoreEntries.map(([k,v])=>`<div class="sbar"><span class="lab">${esc(k)}</span>
-      <span class="track"><span class="fill" style="width:${(v/5*100).toFixed(0)}%"></span></span><span class="val">${v}</span></div>`).join('')}</div>
+      <span class="track"><span class="fill" style="width:${(v/5*100).toFixed(0)}%"></span></span><span class="val">${v}</span></div>`).join('')}</div></div>
+
+    ${galleryImgs.length?`<div class="block"><div class="block-h">实拍 <span class="flag real">真实点评图</span></div>
+      <div class="gallery">${galleryImgs.map(p=>`<div class="gph" style="background-image:url('${p}')"></div>`).join('')}</div></div>`:''}
 
     ${b.real_data?`
-    <div class="sec-title" style="margin:14px 0 8px">✨ 氛围标签 <span class="flag real">真实点评 NLP · 点击看评价</span></div>
+    <div class="block"><div class="block-h">氛围标签 <span class="flag real">点击看评价</span></div>
     <div class="tags-wrap">
-      ${pos.map((t,i)=>`<span class="pill neon ${i===0?'on':''}" data-tag="${esc(t.name)}">${esc(t.name)} <b style="opacity:.6">${t.num}</b></span>`).join('')}
-      ${neg.map(t=>`<span class="pill tag-neg" data-tag="${esc(t.name)}">⚠ ${esc(t.name)} <b style="opacity:.6">${t.num}</b></span>`).join('')}
+      ${pos.map((t,i)=>`<span class="tg ${i===0?'on':''}" data-tag="${esc(t.name)}">${esc(t.name)} ${t.num}</span>`).join('')}
+      ${neg.map(t=>`<span class="tg neg" data-tag="${esc(t.name)}">${esc(t.name)} ${t.num}</span>`).join('')}
     </div>
-    <div id="tag-reviews">${tagReviewsHtml(pos[0]?pos[0].name:'')}</div>`:`
-    <div class="pending-box"><div class="ic">🔍</div>
+    <div id="tag-reviews">${tagReviewsHtml(pos[0]?pos[0].name:'')}</div></div>`:`
+    <div class="pending">
       <div class="tx">该店口碑数据采集中</div>
-      <div class="sx">基础信息(店名/评分/品类/营业)已是大众点评真实数据；<br>评论与氛围标签将在爬虫补充采集后更新</div>
+      <div class="sx">基础信息（店名 / 评分 / 品类 / 营业）已是大众点评真实数据<br>评论与氛围标签将在爬虫补充采集后更新</div>
     </div>`}
 
-    <div class="kv">🕐 <b>${esc((b.hours||[])[0]||'营业时间采集中')}</b></div>
-    <div class="kv">📍 <b>${esc(b.address||b.region||'')}</b></div>
+    <div class="kv"><b>营业</b> ${esc((b.hours||[])[0]||'采集中')}</div>
+    <div class="kv"><b>地址</b> ${esc(b.address||b.region||'')}</div>
 
-    <div class="sec-title" style="margin:14px 0 8px">💬 玩家评价 ${b.real_data?'<span class="flag real">真实点评</span>':'<span class="flag pend">示例</span>'}</div>
-    <div class="review-input"><input id="rv-in" placeholder="说说你在这儿的夜晚…(到店可评)"><button data-review="${b.id}">发布</button></div>
-    <div id="rv-list">${(b.real_data?(b.reviews||[]).slice(0,6).map(reviewCard):[]).join('')}</div>
+    <div class="block"><div class="block-h">玩家评价 ${b.real_data?'<span class="flag real">真实点评</span>':'<span class="flag">示例</span>'}</div>
+    <div class="review-input"><input id="rv-in" placeholder="说说你在这儿的夜晚…"><button data-review="${b.id}">发布</button></div>
+    <div id="rv-list">${(b.real_data?(b.reviews||[]).slice(0,6).map(reviewCard):[]).join('')}</div></div>
   </div>
   <div class="cta-bar">
-    <button class="btn ghost" style="flex:0 0 120px" data-nav="${esc(b.name)}">🧭 导航前往</button>
-    <button class="btn" data-go="#crew">叫人一起去 ›</button>
+    <button class="btn ghost" data-nav="${esc(b.name)}">导航</button>
+    <button class="btn warm" data-go="#crew">叫人一起去</button>
   </div>`;
 };
 function cmtCard(c){return `<div class="cmt"><div class="top"><span class="nick">${esc(c.nick||'玩家')}</span>
@@ -253,7 +264,7 @@ function tagReviewsHtml(tagName){
   const t=(b.nlp||[]).find(x=>x.name===tagName);
   const list=(t&&t.matched_reviews)||[];
   if(!list.length) return `<div class="prov" style="margin:6px 0">「${esc(tagName)}」相关评价采集中</div>`;
-  return `<div class="tagrv"><div class="tagrv-h">📌 提到「${esc(tagName)}」的真实评价 · ${list.length} 条</div>
+  return `<div class="tagrv"><div class="tagrv-h">提到「${esc(tagName)}」的真实评价 · ${list.length} 条</div>
     ${list.map(reviewCard).join('')}</div>`;
 }
 
@@ -263,25 +274,22 @@ routes.events=()=>{
   // group by date
   const groups={};
   all.forEach(e=>{const d=(e.start||'').slice(0,10)||'近期';(groups[d]=groups[d]||[]).push(e);});
-  const dates=Object.keys(groups).sort();
+  const dates=Object.keys(groups).sort().reverse();
   return `
-  <div class="dt-hero noimg" style="height:120px"><button class="dt-back" data-back>‹</button>
-    <div style="position:absolute;bottom:14px;left:18px"><div class="dt-title" style="font-size:23px">活动日历</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:4px">${D.meta.events_count} 场 · 按日期浏览</div></div>
-    <div class="grad"></div></div>
-  <div style="padding:6px 0 90px">
+  <div class="cal-hero"><button class="dt-back" data-back>‹</button>
+    <div class="kicker">Calendar</div>
+    <div class="h1" style="margin-top:8px">活动日历</div>
+    <div class="sub">${D.meta.events_count} 场 · 最新优先</div></div>
+  <div style="padding:0 0 110px">
     ${dates.map(d=>`
-      <div class="datehead">📅 ${dayLabel(d)} <span class="cnt">${d!=='近期'?d:''} · ${groups[d].length} 场</span></div>
+      <div class="datehead">${dayLabel(d)} <span class="cnt">${d!=='近期'?d:''} · ${groups[d].length} 场</span></div>
       <div class="cardlist">${groups[d].map(evRow).join('')}</div>`).join('')}
   </div>`;
 };
 function evRow(e){
-  return `<div class="spot" data-event="${e.id}">
-    <div class="ph" style="background-image:url('${(e.images&&e.images[0])||''}');height:120px">
-      <div class="tagrow">${genrePills(e.dna,1)}</div></div>
-    <div class="bd"><div class="nm">${esc(e.title)}</div>
-      <div class="meta"><span>📍 ${esc(e.venue||'')}</span>${e.start_time?`<span>🕐 ${esc(e.start_time.slice(0,16))}</span>`:''}</div>
-    </div></div>`;
+  return `<div class="spot" data-event="${e.id}" style="height:170px;background-image:url('${(e.images&&e.images[0])||''}')">
+    <div class="ov"><div class="nm" style="font-size:18px">${esc(e.title)}</div>
+      <div class="meta"><span>${esc(e.venue||'')}</span>${e.start_time?`<span>${esc(e.start_time.slice(11,16))}</span>`:''} ${genrePills(e.dna,1)}</div></div></div>`;
 }
 
 /* ================= EVENT DETAIL ================= */
@@ -293,21 +301,20 @@ routes.event=(id)=>{
     ${imgs.length?`<img src="${imgs[0]}" loading="lazy">`:''}<div class="grad"></div></div>
   <div class="dt-body">
     <div class="dt-title">${esc(e.title)}</div>
-    ${e.title_en?`<div style="font-size:12px;color:var(--dim);margin-top:4px">${esc(e.title_en)}</div>`:''}
-    <div class="dt-sub">📍 ${esc(e.venue||'')}</div>
-    <div class="tags-wrap">${(e.tags||[]).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>
-    ${e.dna&&e.dna.length?`<div class="card-box dna"><h3>🔊 今晚现场曲风预告 <span class="flag ai">AI 推测</span></h3>
-      <div class="tags-wrap">${e.dna.map(g=>`<span class="pill" style="background:${GCOLOR[g.genre]||'#444'}2b;border-color:${GCOLOR[g.genre]||'#444'};color:${GCOLOR[g.genre]||'#ccc'}">${esc(g.cn)} ${g.pct}%</span>`).join('')}</div></div>`:''}
-    <div class="kv">📅 <b>${esc(e.date_text||'')}</b></div>
-    ${e.start_time?`<div class="kv">🕐 <b>${esc(e.start_time)}</b></div>`:''}
-    <div class="kv">🎟 <b>${esc(e.price||'免费 / 现场购票')}</b></div>
-    <div class="kv">📍 <b>${esc(e.address||'')}</b></div>
-    <div class="sec-title" style="margin:14px 0 8px">活动详情</div>
-    <p style="font-size:13.5px;line-height:1.75;color:#d4d0e6">${esc(e.desc||'')}</p>
+    ${e.title_en?`<div class="dt-en">${esc(e.title_en)}</div>`:''}
+    <div class="dt-sub">${esc(e.venue||'')}</div>
+    <div class="tags-wrap">${(e.tags||[]).map(t=>`<span class="tg">${esc(t)}</span>`).join('')}</div>
+    ${e.dna&&e.dna.length?`<div class="card-box"><div class="block-h">现场曲风预告 <span class="flag ai">AI 推测</span></div>
+      <div class="tags-wrap">${e.dna.map(g=>`<span class="tg" style="border-color:${GCOLOR[g.genre]||'#444'};color:${GCOLOR[g.genre]||'#ccc'}">${esc(g.cn)} ${g.pct}%</span>`).join('')}</div></div>`:''}
+    <div class="kv"><b>时间</b> ${esc(e.date_text||'')}${e.start_time?' · '+esc(e.start_time.slice(11,16)):''}</div>
+    <div class="kv"><b>票价</b> ${esc(e.price||'免费 / 现场购票')}</div>
+    <div class="kv"><b>地址</b> ${esc(e.address||'')}</div>
+    <div class="block"><div class="block-h">活动详情</div>
+    <p style="font-size:13.5px;line-height:1.8;color:#cfcbdb">${esc(e.desc||'')}</p></div>
   </div>
   <div class="cta-bar">
-    <button class="btn ghost" style="flex:0 0 120px" data-nav="${esc(e.venue||e.title)}">🧭 导航</button>
-    <button class="btn" data-toast="已报名，凭证在「护照-我的订单」">报名/购票</button>
+    <button class="btn ghost" data-nav="${esc(e.venue||e.title)}">导航</button>
+    <button class="btn warm" data-toast="已报名，电子票在「我的」">报名 / 购票</button>
   </div>`;
 };
 
@@ -316,61 +323,61 @@ routes.crew=()=>{
   const f=D.seed.friends_online;const ev=D.events[0];
   const top=[...D.bars].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0))[0];
   return `
-  <div class="park-hero"><div class="brand">✦ 组局 · 和谁一起</div>
-    <div class="big">组局即推广<span class="gradtext">·人人造夜</span></div>
-    <div class="vibe">不向陌生人匹配，只协调你已有的关系</div></div>
-  <div class="glass">
-    <div style="font-weight:900;font-size:15px;margin-bottom:6px">🤖 AI 夜晚管家</div>
-    <div style="font-size:12px;color:var(--sub);margin-bottom:10px">说出口味+人数+区域，一键生成今晚路线</div>
-    <div class="tags-wrap"><span class="pill on">深夜 Techno</span><span class="pill">4 人</span><span class="pill">外滩</span></div>
-    <div style="font-size:13px;line-height:1.95;background:rgba(177,77,255,.1);border-radius:11px;padding:12px;margin-top:8px">
-      🍸 <b>21:00 预热</b> · ${esc(top.name)}<br>🔊 <b>23:00 主场</b> · ${esc(ev.venue||'')} — ${esc(ev.title)}<br>🍜 <b>02:00 续摊</b> · 附近夜宵</div>
-    <button class="btn" style="margin-top:12px" data-toast="路线已保存，可一键叫人">⚡ 生成今晚路线</button></div>
-  <div class="sec-title">👀 今晚谁有空 <span style="font-size:11px;color:var(--dim);font-weight:400">· 仅授权好友可见</span></div>
-  <div class="glass" style="margin-top:0">${f.map(x=>`<div class="friend"><span class="av">${esc((x.nick||'?')[0])}</span>
+  <div class="cal-hero"><div class="kicker">Crew</div>
+    <div class="h1" style="margin-top:8px">和谁一起</div>
+    <div class="sub">组局即推广 · 只协调你已有的关系，不向陌生人匹配</div></div>
+  <div class="card-box" style="margin:14px 20px">
+    <div class="block-h">AI 夜晚管家</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:10px">说出口味 + 人数 + 区域，一键生成今晚路线</div>
+    <div class="tags-wrap"><span class="tg on">深夜 Techno</span><span class="tg">4 人</span><span class="tg">外滩</span></div>
+    <div style="font-size:13px;line-height:2;background:var(--card2);border-radius:14px;padding:14px;margin-top:10px">
+      <b>21:00 预热</b> · ${esc(top.name)}<br><b>23:00 主场</b> · ${esc(ev.venue||'')} — ${esc(ev.title)}<br><b>02:00 续摊</b> · 附近夜宵</div>
+    <button class="btn warm" style="margin-top:14px" data-toast="路线已保存，可一键叫人">生成今晚路线</button></div>
+  <div class="slabel"><div class="st">今晚谁有空</div></div>
+  <div class="card-box" style="margin:0 20px">${f.map(x=>`<div class="friend"><span class="av">${esc((x.nick||'?')[0])}</span>
     <div style="flex:1"><div style="font-weight:700">${esc(x.nick)}</div>
-    <div style="font-size:12px;color:var(--sub)">${esc(x.status)}${x.spot?' · 📍'+esc(x.spot):''}</div></div>
-    ${x.spot?'<span class="dot-on"></span>':'<span class="pill">叫TA</span>'}</div>`).join('')}</div>
-  <div class="sec-title">🎉 发起局 · 成团解锁权益</div>
-  <div class="glass" style="margin-top:0">
-    <div style="font-weight:800">${esc(ev.title)}</div>
-    <div style="font-size:12px;color:var(--c);margin:5px 0">📍 ${esc(ev.venue||'')}</div>
+    <div style="font-size:12px;color:var(--sub)">${esc(x.status)}${x.spot?' · '+esc(x.spot):''}</div></div>
+    ${x.spot?'<span class="dot-on"></span>':'<span class="chip">叫TA</span>'}</div>`).join('')}</div>
+  <div class="slabel"><div class="st">发起局</div></div>
+  <div class="card-box" style="margin:0 20px">
+    <div style="font-weight:800;font-size:15px">${esc(ev.title)}</div>
+    <div style="font-size:12px;color:var(--neon);margin:6px 0">${esc(ev.venue||'')}</div>
     <div style="font-size:13px;color:var(--sub);margin-top:8px">成团进度 · 还差 <b style="color:#fff">2 人</b>解锁卡座升级</div>
     <div class="progress"><i style="width:66%"></i></div>
-    <div class="tags-wrap"><span class="pill on">满2人 门票9折 ✓</span><span class="pill on">满4人 酒水券 ✓</span><span class="pill">满6人 卡座升级</span></div>
-    <button class="btn" style="margin-top:12px" data-toast="组局已发起，分享卡已生成">🔗 发起局并生成邀请海报</button>
-    <div class="prov">被邀请人真实成交 → 自动触发单层归因分佣（造夜人战绩+1）</div></div>
-  <div style="height:22px"></div>`;
+    <div class="tags-wrap"><span class="tg on">满2人 门票9折</span><span class="tg on">满4人 酒水券</span><span class="tg">满6人 卡座升级</span></div>
+    <button class="btn" style="margin-top:14px" data-toast="组局已发起，分享卡已生成">发起局 · 生成邀请海报</button>
+    <div class="prov">被邀请人真实成交 → 自动触发单层归因分佣（造夜人战绩 +1）</div></div>
+  <div style="height:110px"></div>`;
 };
 
 /* ================= PASSPORT (护照 + 钱包) ================= */
 routes.passport=()=>{
   const u=D.seed.user;const w=D.seed.wallet;
   return `
-  <div class="park-hero"><div class="brand">✦ 夜生活护照</div>
-    <div class="big">我是谁 <span class="gradtext">🪪</span></div>
-    <div class="vibe">你的身份 = 你听什么 + 你带过谁来</div></div>
-  <div class="persona-card"><div class="pl">🎵 你的夜晚音乐人格</div>
-    <div class="pn gradtext">${esc(u.music_persona)}</div>
-    <div style="font-size:11px;color:var(--dim)">${esc(u.persona_from)}</div>
-    <div class="badge-grid">${u.badges.map(b=>`<span class="pill neon">${esc(b)}</span>`).join('')}</div></div>
+  <div class="cal-hero"><div class="kicker">Passport</div>
+    <div class="h1" style="margin-top:8px">我是谁</div>
+    <div class="sub">你的身份 = 你听什么 + 你带过谁来</div></div>
+  <div class="persona"><div class="pl">你的夜晚音乐人格</div>
+    <div class="pn">${esc(u.music_persona)}</div>
+    <div style="font-size:11px;color:var(--sub)">${esc(u.persona_from)}</div>
+    <div class="badge-grid">${u.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</div></div>
   <div class="stat-grid">
-    <div class="stat-box"><div class="n gradtext">Lv.${u.level}</div><div class="l">${esc(u.level_name)}</div></div>
-    <div class="stat-box"><div class="n">${u.stamps}</div><div class="l">场所集章</div></div>
+    <div class="stat-box"><div class="n" style="color:var(--neon)">Lv.${u.level}</div><div class="l">${esc(u.level_name)}</div></div>
+    <div class="stat-box"><div class="n">${u.stamps}</div><div class="l">集章</div></div>
     <div class="stat-box"><div class="n">${u.promoter.brought}</div><div class="l">带过的人</div></div></div>
-  <div class="wallet"><div style="font-size:12px;color:var(--sub)">💰 分佣钱包余额</div>
+  <div class="wallet"><div style="font-size:12px;opacity:.7">分佣钱包余额</div>
     <div class="bal">¥${w.balance.toFixed(2)}</div>
-    <div style="font-size:12px;color:var(--sub);margin-top:6px">待结算 ¥${w.pending.toFixed(2)} · 累计提现 ¥${w.withdrawn.toFixed(2)}</div>
-    <div style="display:flex;gap:10px;margin-top:12px"><button class="btn" data-toast="提现申请已提交">提现</button>
-      <button class="btn ghost" data-toast="可兑换酒水券/门票/卡座">兑换权益</button></div></div>
-  <div class="sec-title">🗺 场所集章 · 夜行足迹</div>
-  <div class="glass" style="margin-top:0"><div style="font-size:13px;color:var(--sub)">已集 ${u.stamps}/${u.stamp_target} 章 · 集齐解锁年度足迹卡</div>
+    <div style="font-size:12px;opacity:.7;margin-top:6px">待结算 ¥${w.pending.toFixed(2)} · 累计提现 ¥${w.withdrawn.toFixed(2)}</div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="btn" style="background:#0b0b0f;color:var(--neon)" data-toast="提现申请已提交">提现</button>
+      <button class="btn" style="background:rgba(0,0,0,.15);color:#0b0b0f" data-toast="可兑换酒水券/门票/卡座">兑换权益</button></div></div>
+  <div class="slabel"><div class="st">夜行足迹</div></div>
+  <div class="card-box" style="margin:0 20px"><div style="font-size:13px;color:var(--sub)">已集 ${u.stamps}/${u.stamp_target} 章 · 集齐解锁年度足迹卡</div>
     <div class="progress"><i style="width:${(u.stamps/u.stamp_target*100).toFixed(0)}%"></i></div>
-    <div class="row" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div></div>
-  <div class="sec-title">📖 夜生活攻略 · 社区</div>
-  <div style="padding:0 16px">${D.posts.map(noteCard).join('')}</div>
-  <div class="prov" style="margin:4px 16px">护照战绩为演示编排：机制真实，数字以真实活动价格/小红书爆款互动量做种子</div>
-  <div style="height:22px"></div>`;
+    <div class="hscroll" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div></div>
+  <div class="slabel"><div class="st">攻略社区</div></div>
+  <div class="pad">${D.posts.map(noteCard).join('')}</div>
+  <div class="prov" style="margin:4px 20px">护照战绩为演示编排：机制真实，数字以真实活动价格 / 小红书互动量做种子</div>
+  <div style="height:110px"></div>`;
 };
 function noteCard(p){const m=p.metrics||{};return `<div class="note-card" data-note="${p.id}">
   <div class="ph" style="background-image:url('${(p.images&&p.images[0])||''}')"></div>
@@ -390,7 +397,7 @@ routes.note=(id)=>{
       <div class="stat-box"><div class="n" style="font-size:17px">${m.comment_count||0}</div><div class="l">评论</div></div>
       <div class="stat-box"><div class="n" style="font-size:17px">${m.share_count||0}</div><div class="l">分享</div></div></div>
     <p style="font-size:13.5px;line-height:1.75;color:#d4d0e6;white-space:pre-wrap">${esc(p.content||'')}</p>
-    <div class="sec-title" style="margin:14px 0 8px">💬 真实评论 · 用户在问什么</div>
+    <div class="block-h" style="margin:16px 0 8px">真实评论 · 用户在问什么</div>
     ${(p.comments||[]).slice(0,12).map(cmtCard).join('')}</div>`;
 };
 
@@ -419,7 +426,7 @@ function bindView(name){
     e.stopPropagation();const id=el.dataset.vote;
     if(MYVOTED[id]){toast('一店一票，今日已投');return;}
     MYVOTED[id]=true;VOTES[id]=(VOTES[id]||0)+1;
-    toast('投票成功 +1 🎉，榜单已更新');setTimeout(render,400);
+    toast('投票成功 +1，榜单已更新');setTimeout(render,400);
   });
   // review publish
   const rb=$('[data-review]'); if(rb) rb.onclick=()=>{
