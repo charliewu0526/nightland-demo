@@ -48,7 +48,7 @@ function render(){
   const h=(location.hash||'#home').slice(1);const [name,arg]=h.split('/');
   const fn=routes[name]||routes.home;app.scrollTop=0;
   app.innerHTML=`<div class="view">${fn(arg)}</div>`;
-  const tabFor={home:'home',spot:'home',event:'home',note:'home',rank:'rank',crew:'crew',passport:'passport'}[name]||'home';
+  const tabFor={home:'home',spot:'home',event:'home',events:'home',note:'home',rank:'rank',crew:'crew',passport:'passport'}[name]||'home';
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.route===tabFor));
   bindView(name);
 }
@@ -71,12 +71,31 @@ function zoneFor(region){
 }
 
 /* ================= HOME (首页: 乐园地图 + 本周活动) ================= */
-let MAP_FILTER={type:'all'};
+/* MAP_FILTER: cat=品类筛选, genre=音乐风格筛选 (可叠加) */
+let MAP_FILTER={cat:'all',genre:'all'};
+let WK_DAY='all';
+const TODAY='2026-06-30';
+function barGenres(b){return (b.dna||[]).map(g=>g.genre);}
+function allGenres(){
+  const c={};D.bars.forEach(b=>(b.dna||[]).forEach(g=>{c[g.genre]=(c[g.genre]||0)+1;}));
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([g])=>g);
+}
+const GENRE_CN={Techno:'Techno',House:'House',Disco:'Disco',EDM:'电子',HipHop:'嘻哈',Soul:'Soul/R&B',Jazz:'爵士',Pop:'流行',Rock:'摇滚',Folk:'民谣',Latin:'拉丁',Live:'现场'};
+function filteredBars(){
+  return D.bars.filter(b=>{
+    if(MAP_FILTER.cat!=='all' && b.category!==MAP_FILTER.cat) return false;
+    if(MAP_FILTER.genre!=='all' && !barGenres(b).includes(MAP_FILTER.genre)) return false;
+    return true;
+  });
+}
 routes.home=()=>{
   const cats=[...new Set(D.bars.map(b=>b.category))];
-  // week events: sort by start date, take upcoming
-  const today='2026-06-30';
-  const wk=[...D.events].filter(e=>(e.start||'')>=today).sort((a,b)=>(a.start||'').localeCompare(b.start||'')).slice(0,8);
+  const genres=allGenres();
+  const fb=filteredBars();
+  // week events grouped by day tab
+  const upcoming=[...D.events].filter(e=>(e.start||'')>=TODAY).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  const wk = WK_DAY==='all' ? upcoming.slice(0,10) : upcoming.filter(e=>(e.start||'').slice(0,10)===WK_DAY);
+  const dayTabs=weekDayTabs(upcoming);
   return `
   <div class="park-hero">
     <div class="brand">✦ ${esc(BRAND)} · 上海夜乐园</div>
@@ -86,24 +105,37 @@ routes.home=()=>{
   </div>
 
   <div class="sec-title">🗺 夜乐园地图 <span class="more" data-go="#rank">实时榜单 ›</span></div>
+  <div style="font-size:11px;color:var(--dim);margin:0 16px 4px">按场所类型</div>
   <div class="mapfilters">
-    <span class="pill ${MAP_FILTER.type==='all'?'on':''}" data-mf="all">全部</span>
-    ${cats.map(c=>`<span class="pill ${MAP_FILTER.type===c?'on':''}" data-mf="${esc(c)}">${esc(c)}</span>`).join('')}
+    <span class="pill ${MAP_FILTER.cat==='all'?'on':''}" data-mfc="all">全部类型</span>
+    ${cats.map(c=>`<span class="pill ${MAP_FILTER.cat===c?'on':''}" data-mfc="${esc(c)}">${esc(c)}</span>`).join('')}
+  </div>
+  <div style="font-size:11px;color:var(--dim);margin:6px 16px 4px">🎵 按音乐风格 <span class="flag ai">AI 推测</span></div>
+  <div class="mapfilters">
+    <span class="pill ${MAP_FILTER.genre==='all'?'on':''}" data-mfg="all">全部风格</span>
+    ${genres.map(g=>`<span class="pill ${MAP_FILTER.genre===g?'on':''}" data-mfg="${g}" style="${MAP_FILTER.genre===g?'':'border-color:'+(GCOLOR[g]||'#444')+';color:'+(GCOLOR[g]||'#ccc')}">${esc(GENRE_CN[g]||g)}</span>`).join('')}
   </div>
   <div class="mapwrap"><div class="parkmap" id="parkmap">
     ${ZONES.map(z=>`<div class="zone-blob" style="left:${z.x-10}%;top:${z.y-6}%;width:120px;height:120px;background:${z.c}"></div>`).join('')}
     ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${z.name}</div>`).join('')}
-    <!-- dots injected by bindView -->
     <div class="maptip" id="maptip"></div>
   </div></div>
-  <div class="prov" style="margin:8px 16px">📍 插画式乐园地图(非真实比例)· 点击点位查看场所，详情页可一键唤起导航</div>
+  <div class="prov" style="margin:8px 16px">📍 当前显示 <b style="color:var(--c)">${fb.length}</b> 家 · 插画式乐园地图(非真实比例)· 点位可查看详情、一键导航</div>
 
-  <div class="sec-title">📅 本周活动 <span class="more" data-go="#rank">全部 ›</span></div>
-  <div class="row">${wk.map(wkCard).join('')}</div>
+  <div class="sec-title">📅 本周活动 <span class="more" data-go="#events">查看全部 ›</span></div>
+  <div class="mapfilters">${dayTabs}</div>
+  <div class="row" id="wkrow">${wk.length?wk.map(wkCard).join(''):'<div style="color:var(--dim);padding:14px;font-size:13px">这天暂无活动</div>'}</div>
   <div style="height:22px"></div>`;
 };
+function weekDayTabs(upcoming){
+  // build tabs for distinct upcoming days (cap 6) + 全部
+  const days=[...new Set(upcoming.map(e=>(e.start||'').slice(0,10)))].slice(0,6);
+  let tabs=`<span class="pill ${WK_DAY==='all'?'on':''}" data-wd="all">全部</span>`;
+  tabs+=days.map(d=>`<span class="pill ${WK_DAY===d?'on':''}" data-wd="${d}">${dayLabel(d)}</span>`).join('');
+  return tabs;
+}
 function dayLabel(start){
-  const map={'2026-06-30':'今晚','2026-07-01':'明天','2026-07-03':'周五','2026-07-04':'周六','2026-07-05':'周日'};
+  const map={'2026-06-30':'今晚','2026-07-01':'明天','2026-07-02':'周四','2026-07-03':'周五','2026-07-04':'周六','2026-07-05':'周日'};
   return map[start]|| (start? start.slice(5).replace('-','/'):'近期');
 }
 function wkCard(e){
@@ -179,11 +211,12 @@ routes.spot=(id)=>{
       <span class="track"><span class="fill" style="width:${(v/5*100).toFixed(0)}%"></span></span><span class="val">${v}</span></div>`).join('')}</div>
 
     ${b.real_data?`
-    <div class="sec-title" style="margin:14px 0 8px">✨ 氛围标签 <span class="flag real">真实点评 NLP</span></div>
+    <div class="sec-title" style="margin:14px 0 8px">✨ 氛围标签 <span class="flag real">真实点评 NLP · 点击看评价</span></div>
     <div class="tags-wrap">
-      ${pos.map(t=>`<span class="pill neon">${esc(t.name)} <b style="opacity:.6">${t.num}</b></span>`).join('')}
-      ${neg.map(t=>`<span class="pill tag-neg">⚠ ${esc(t.name)}</span>`).join('')}
-    </div>`:`
+      ${pos.map((t,i)=>`<span class="pill neon ${i===0?'on':''}" data-tag="${esc(t.name)}">${esc(t.name)} <b style="opacity:.6">${t.num}</b></span>`).join('')}
+      ${neg.map(t=>`<span class="pill tag-neg" data-tag="${esc(t.name)}">⚠ ${esc(t.name)} <b style="opacity:.6">${t.num}</b></span>`).join('')}
+    </div>
+    <div id="tag-reviews">${tagReviewsHtml(pos[0]?pos[0].name:'')}</div>`:`
     <div class="pending-box"><div class="ic">🔍</div>
       <div class="tx">该店口碑数据采集中</div>
       <div class="sx">基础信息(店名/评分/品类/营业)已是大众点评真实数据；<br>评论与氛围标签将在爬虫补充采集后更新</div>
@@ -192,9 +225,9 @@ routes.spot=(id)=>{
     <div class="kv">🕐 <b>${esc((b.hours||[])[0]||'营业时间采集中')}</b></div>
     <div class="kv">📍 <b>${esc(b.address||b.region||'')}</b></div>
 
-    <div class="sec-title" style="margin:14px 0 8px">💬 玩家评价 ${b.real_data?'':'<span class="flag pend">示例</span>'}</div>
+    <div class="sec-title" style="margin:14px 0 8px">💬 玩家评价 ${b.real_data?'<span class="flag real">真实点评</span>':'<span class="flag pend">示例</span>'}</div>
     <div class="review-input"><input id="rv-in" placeholder="说说你在这儿的夜晚…(到店可评)"><button data-review="${b.id}">发布</button></div>
-    <div id="rv-list">${(b.real_data?(D.posts[0].comments||[]).slice(0,3):[]).map(c=>cmtCard(c)).join('')}</div>
+    <div id="rv-list">${(b.real_data?(b.reviews||[]).slice(0,6).map(reviewCard):[]).join('')}</div>
   </div>
   <div class="cta-bar">
     <button class="btn ghost" style="flex:0 0 120px" data-nav="${esc(b.name)}">🧭 导航前往</button>
@@ -204,6 +237,52 @@ routes.spot=(id)=>{
 function cmtCard(c){return `<div class="cmt"><div class="top"><span class="nick">${esc(c.nick||'玩家')}</span>
   <span class="ip">${esc(c.ip||'')}</span><span class="like">♥ ${c.liked||0}</span></div>
   <div class="ct">${esc(c.content||'')}</div></div>`;}
+/* real LAGOM review card with star + body + pic thumbnails */
+function reviewCard(r){
+  const st='★'.repeat(r.star||5)+'☆'.repeat(Math.max(0,5-(r.star||5)));
+  const pics=(r.pics||[]).slice(0,3).map(p=>`<span class="rv-pic" style="background-image:url('${p}')"></span>`).join('');
+  return `<div class="cmt"><div class="top"><span class="nick">${esc(r.user||'点评用户')}</span>
+    <span class="star" style="font-size:11px">${st}</span><span class="like">${esc(r.time||'')}</span></div>
+    <div class="ct">${esc(r.body||'')}</div>
+    ${pics?`<div class="rv-pics">${pics}</div>`:''}</div>`;
+}
+/* tag -> linked real reviews (from b.nlp[].matched_reviews) */
+function tagReviewsHtml(tagName){
+  const b=D.bars.find(x=>x.id==='lagom');
+  if(!b||!tagName) return '';
+  const t=(b.nlp||[]).find(x=>x.name===tagName);
+  const list=(t&&t.matched_reviews)||[];
+  if(!list.length) return `<div class="prov" style="margin:6px 0">「${esc(tagName)}」相关评价采集中</div>`;
+  return `<div class="tagrv"><div class="tagrv-h">📌 提到「${esc(tagName)}」的真实评价 · ${list.length} 条</div>
+    ${list.map(reviewCard).join('')}</div>`;
+}
+
+/* ================= EVENTS CALENDAR (全部活动, 按日期分组) ================= */
+routes.events=()=>{
+  const all=[...D.events].sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  // group by date
+  const groups={};
+  all.forEach(e=>{const d=(e.start||'').slice(0,10)||'近期';(groups[d]=groups[d]||[]).push(e);});
+  const dates=Object.keys(groups).sort();
+  return `
+  <div class="dt-hero noimg" style="height:120px"><button class="dt-back" data-back>‹</button>
+    <div style="position:absolute;bottom:14px;left:18px"><div class="dt-title" style="font-size:23px">活动日历</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:4px">${D.meta.events_count} 场 · 按日期浏览</div></div>
+    <div class="grad"></div></div>
+  <div style="padding:6px 0 90px">
+    ${dates.map(d=>`
+      <div class="datehead">📅 ${dayLabel(d)} <span class="cnt">${d!=='近期'?d:''} · ${groups[d].length} 场</span></div>
+      <div class="cardlist">${groups[d].map(evRow).join('')}</div>`).join('')}
+  </div>`;
+};
+function evRow(e){
+  return `<div class="spot" data-event="${e.id}">
+    <div class="ph" style="background-image:url('${(e.images&&e.images[0])||''}');height:120px">
+      <div class="tagrow">${genrePills(e.dna,1)}</div></div>
+    <div class="bd"><div class="nm">${esc(e.title)}</div>
+      <div class="meta"><span>📍 ${esc(e.venue||'')}</span>${e.start_time?`<span>🕐 ${esc(e.start_time.slice(0,16))}</span>`:''}</div>
+    </div></div>`;
+}
 
 /* ================= EVENT DETAIL ================= */
 routes.event=(id)=>{
@@ -324,8 +403,17 @@ function bindView(name){
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
   document.querySelectorAll('[data-toast]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();toast(el.dataset.toast);});
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
-  // map filter
-  document.querySelectorAll('[data-mf]').forEach(el=>el.onclick=()=>{MAP_FILTER.type=el.dataset.mf;render();});
+  // map filters (category + genre, stackable) — re-render only dots+filters
+  document.querySelectorAll('[data-mfc]').forEach(el=>el.onclick=()=>{MAP_FILTER.cat=el.dataset.mfc;render();});
+  document.querySelectorAll('[data-mfg]').forEach(el=>el.onclick=()=>{MAP_FILTER.genre=el.dataset.mfg;render();});
+  // week day tabs
+  document.querySelectorAll('[data-wd]').forEach(el=>el.onclick=()=>{WK_DAY=el.dataset.wd;render();});
+  // clickable atmosphere tag -> scroll to linked reviews
+  document.querySelectorAll('[data-tag]').forEach(el=>el.onclick=()=>{
+    const name=el.dataset.tag;
+    document.querySelectorAll('[data-tag]').forEach(x=>x.classList.toggle('on',x===el));
+    const box=$('#tag-reviews'); if(box){box.innerHTML=tagReviewsHtml(name);box.scrollIntoView({behavior:'smooth',block:'center'});}
+  });
   // voting
   document.querySelectorAll('[data-vote]').forEach(el=>el.onclick=(e)=>{
     e.stopPropagation();const id=el.dataset.vote;
@@ -345,7 +433,7 @@ function bindView(name){
 function renderDots(){
   const pm=$('#parkmap'); if(!pm) return;
   const tip=$('#maptip');
-  let list=D.bars; if(MAP_FILTER.type!=='all') list=D.bars.filter(b=>b.category===MAP_FILTER.type);
+  let list=filteredBars();
   // remove old dots
   pm.querySelectorAll('.dot').forEach(d=>d.remove());
   list.forEach(b=>{
