@@ -5,6 +5,14 @@ const BRAND = (D.meta && D.meta.brand) || 'tonight';
 const GCOLOR = {Techno:'#5B3DF5',House:'#5B3DF5',Disco:'#FF4D6D',EDM:'#5B3DF5',
   HipHop:'#FF6B2C',Soul:'#FF4D6D',Jazz:'#0A0A0A',Pop:'#FF4D6D',Rock:'#FF6B2C',
   Folk:'#0A0A0A',Latin:'#FF6B2C',Live:'#0A0A0A'};
+/* inline line-icons (no emoji) */
+const IC={
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>',
+  bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+  heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>',
+  arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+};
 /* live vote state (mutable, seeded from real signals) */
 const VOTES = Object.assign({}, D.votes||{});
 const MYVOTED = {};
@@ -122,6 +130,8 @@ const MOODQ=[
     {v:'live',t:'现场音乐',feat:'live'},{v:'calm',t:'安静喝一杯',feat:'quiet'}]},
 ];
 let MOOD={}; // {energy,scene,want} 今晚(可选)
+try{const m=JSON.parse(localStorage.getItem('tonight_mood')||'null');if(m)MOOD=m;}catch(e){}
+function saveMood(){try{localStorage.setItem('tonight_mood',JSON.stringify(MOOD));}catch(e){}}
 function moodFeats(){ // 当前心情命中的特色集合
   const s=new Set();
   MOODQ.forEach(q=>{const a=MOOD[q.k];if(a){const o=q.opts.find(x=>x.v===a);if(o&&o.feat)s.add(o.feat);}});
@@ -129,6 +139,27 @@ function moodFeats(){ // 当前心情命中的特色集合
 }
 function moodAnswered(){return MOODQ.some(q=>MOOD[q.k]);}
 function moodLabel(){return MOODQ.map(q=>{const a=MOOD[q.k];const o=a&&q.opts.find(x=>x.v===a);return o?o.t:null;}).filter(Boolean).join(' · ');}
+/* ---- mood popup (reusable modal) ---- */
+function openMood(){
+  const wrap=document.getElementById('modal');
+  wrap.innerHTML=`
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-h">今晚想怎样<span class="sheet-sub">结合你的人格，给更准的推荐</span></div>
+    ${MOODQ.map(q=>`<div class="msheet-row"><div class="msheet-q">${esc(q.q)}</div>
+      <div class="msheet-chips">${q.opts.map(o=>`<span class="chip ${MOOD[q.k]===o.v?'on':''}" data-msk="${q.k}" data-msv="${o.v}">${esc(o.t)}</span>`).join('')}</div></div>`).join('')}
+    <button class="btn warm" id="mood-apply">应用到今夜推荐</button>
+    <div class="quiz-skip" id="mood-close">跳过</div>
+  </div>`;
+  wrap.className='show';
+  wrap.querySelectorAll('[data-msk]').forEach(el=>el.onclick=()=>{
+    const k=el.dataset.msk;MOOD[k]=(MOOD[k]===el.dataset.msv)?undefined:el.dataset.msv;
+    wrap.querySelectorAll(`[data-msk="${k}"]`).forEach(x=>x.classList.toggle('on',x===el&&MOOD[k]===el.dataset.msv));
+  });
+  wrap.querySelector('#mood-apply').onclick=()=>{saveMood();closeModal();render();if(moodAnswered())toast('已按今晚心情调整推荐');};
+  wrap.querySelector('#mood-close').onclick=()=>closeModal();
+}
+function closeModal(){const w=document.getElementById('modal');if(w){w.className='';w.innerHTML='';}}
 const TODAY='2026-06-30';
 function barGenres(b){return (b.dna||[]).map(g=>g.genre);}
 function allGenres(){
@@ -193,52 +224,55 @@ routes.home=()=>{
   const covImg=cover(covBar)||'';
   const covDist=distLabel(covBar);
   return `
-  <div class="home-top">
-    <div><div class="hi">${USER.persona?esc(USER.persona.label):'晚上好，夜猫子'}</div>
-      <div style="font-family:'Archivo Black';font-size:20px;margin-top:2px">今夜 · ${esc((USER.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))}</div></div>
-    <div class="me" data-go="#passport"></div>
+  <div class="topbar">
+    <div class="tb-loc"><span class="tb-hi">${USER.persona?esc(USER.persona.label):'今夜好'}</span>
+      <span class="tb-city">${esc((USER.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 今夜</span></div>
+    <div class="tb-actions">
+      <button class="icon-btn" data-scroll="discover">${IC.search}</button>
+      <button class="icon-btn" data-toast="今晚 3 个局在等你">${IC.bell}</button>
+      <button class="icon-btn avatar" data-go="#passport"></button>
+    </div>
   </div>
-  <div class="pitch">不问预算，先问你听什么。<b>tonight</b> 用音乐口味 + 真实口碑，帮你找到今夜对味的人和场。</div>
-  <div class="mood">
-    <div class="mood-head"><span class="mood-q">今晚想怎样？</span>
-      ${moodAnswered()?`<span class="mood-clear" data-moodclear>重选</span>`:`<span class="mood-hint">10秒，让推荐更准</span>`}</div>
-    ${MOODQ.map(q=>`<div class="mood-row"><span class="mood-lab">${esc(q.q)}</span><div class="mood-chips">
-      ${q.opts.map(o=>`<span class="chip sm ${MOOD[q.k]===o.v?'on':''}" data-moodk="${q.k}" data-moodv="${o.v}">${esc(o.t)}</span>`).join('')}
-    </div></div>`).join('')}
-    ${USER.persona?'':`<div style="margin-top:8px"><span class="chip sm warm" data-go="#quiz">先测今夜人格 →</span></div>`}
-  </div>
-  <div class="search" data-scroll="discover">搜索场所、活动、曲风…</div>
 
   <div class="cover-hero" style="background-image:url('${covImg}')" data-spot="${covBar.id}">
+    <button class="fav-btn" data-toast="已收藏到你的夜单">${IC.heart}</button>
     <div class="cap">
       <div class="day">今夜为你 · ${covBar.real_data?'真实档案':'精选'}</div>
-      <div class="ttl">${esc(covBar.name)}</div>
+      <div class="ttl">${esc((covBar.name||'').split(/[·・]/)[0].trim())}</div>
       <div class="loc">${esc(covBar.category||'')} · ${esc((covBar.region||'').replace('商圈',''))}${covDist?' · '+covDist:''}</div>
     </div>
   </div>
 
-  <div class="sect" id="discover"><div class="t"><small>Curated for tonight</small>今夜为你选了 ${picks.length} 个</div></div>
-  ${picks.map((b,i)=>`
-    <div class="pick" style="background-image:url('${cover(b)}')" data-spot="${b.id}">
-      <div class="tag">${b.real_data?'真实档案':'AI 精选'}</div>
-      <div class="cap"><div class="nm">${esc(b.name)}</div>
-        <div class="why">${pickWhy[i]||esc(b.region)}</div></div>
-    </div>`).join('')}
+  <div class="mood-strip" data-moodopen>
+    ${moodAnswered()?`<span class="ms-on">今晚 · ${esc(moodLabel())}</span><span class="mood-clear" data-moodclear>重选</span>`
+      :`<span class="ms-ask">今晚想怎样？<b>10 秒调出你的专属推荐</b></span><span class="ms-arr">›</span>`}
+  </div>
 
   <div class="bento">
     <div class="b b1" data-go="#map"><div class="bn">EXPLORE</div>
-      <div class="bt">夜上海地图</div><div class="bs">${D.meta.bars_count} 家 · 按音乐风格点亮城市</div></div>
+      <div class="bt">夜巡地图</div><div class="bs">${D.meta.bars_count} 家 · 按曲风点亮全城</div>
+      <div class="b-badge">${D.meta.bars_count}</div></div>
     <div class="b b2" data-go="#rank"><div class="bn">RANK</div>
       <div class="bt">今夜风云</div><div class="bs">玩家票选</div></div>
     <div class="b b3" data-go="#events"><div class="bn">EVENTS</div>
       <div class="bt">时刻表</div><div class="bs">${D.meta.events_count} 场</div></div>
   </div>
 
+  <div class="sect" id="discover"><div class="t"><small>Curated for tonight</small>今夜为你选了 ${picks.length} 个</div></div>
+  ${picks.map((b,i)=>`
+    <div class="pick" style="background-image:url('${cover(b)}')" data-spot="${b.id}">
+      <div class="tag">${b.real_data?'真实档案':'AI 精选'}</div>
+      <button class="fav-btn sm" data-toast="已收藏" data-stop>${IC.heart}</button>
+      <div class="cap"><div class="nm">${esc(b.name)}</div>
+        <div class="why">${pickWhy[i]||esc(b.region)}</div></div>
+    </div>`).join('')}
+
   <div class="concierge" data-toast="正在为你规划今晚：预热 → 主场 → 续摊">
-    <div class="ct">懒得选？让我安排今晚</div>
-    <div class="cs">说出口味 + 人数 + 区域，AI 夜晚管家给你一条完整路线</div>
+    <div class="cc-l"><div class="ct">懒得选？让我安排今晚</div>
+      <div class="cs">口味 + 人数 + 区域，一条完整夜路线</div></div>
+    <div class="cc-arr">${IC.arrow}</div>
   </div>
-  <div style="height:110px"></div>`;
+  <div style="height:120px"></div>`;
 };
 function weekDayTabs(upcoming){
   const days=[...new Set(upcoming.map(e=>(e.start||'').slice(0,10)))].slice(0,6);
@@ -291,27 +325,29 @@ function buildPersona(){
   USER.persona={label,genre:a.genre,social:a.social,energy:a.energy,budget:a.budget};
   setLoc(a.loc||'静安寺商圈');USER.done=true;saveUser();
 }
+/* 首次流程: 纯人格5题 → 结果。(心情改为首页弹窗) */
 routes.quiz=()=>{
-  // result screen
-  if(QZ.step>=QUIZ.length){
-    const a=QZ.ans;const label=(PERSONA_LABEL[a.genre]||'夜行')+' '+(SOCIAL_LABEL[a.social]||'玩家');
-    return `
-    <div class="quiz-wrap result">
-      <div class="kicker" style="text-align:center">Your nightlife persona</div>
-      <div class="persona-big">
-        <div class="pl">今夜的你是</div>
-        <div class="pn">${esc(label)}</div>
-        <div class="ptags">
-          <span>${esc(GENRE_CN[a.genre]||a.genre)}</span>
-          <span>${esc(SOCIAL_LABEL[a.social]||'')}</span>
-          <span>${a.energy==='high'?'蹦到天亮':'聊到深夜'}</span>
-        </div>
-        <div class="ploc">已定位 · ${esc((a.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 为你锁定附近对味场子</div>
+  if(QZ.step<QUIZ.length){ return quizQuestion(); }
+  // ---- result ----
+  const a=QZ.ans;const label=(PERSONA_LABEL[a.genre]||'夜行')+' '+(SOCIAL_LABEL[a.social]||'玩家');
+  return `
+  <div class="quiz-wrap result">
+    <div class="kicker" style="text-align:center">Your nightlife persona</div>
+    <div class="persona-big">
+      <div class="pl">今夜的你是</div>
+      <div class="pn">${esc(label)}</div>
+      <div class="ptags">
+        <span>${esc(GENRE_CN[a.genre]||a.genre)}</span>
+        <span>${esc(SOCIAL_LABEL[a.social]||'')}</span>
+        <span>${a.energy==='high'?'蹦到天亮':'聊到深夜'}</span>
       </div>
-      <button class="btn warm" id="quiz-done">进入今夜</button>
-      <div class="quiz-skip" id="quiz-retry">重新测一次</div>
-    </div>`;
-  }
+      <div class="ploc">已定位 · ${esc((a.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 为你锁定附近对味场子</div>
+    </div>
+    <button class="btn warm" id="quiz-done">进入今夜</button>
+    <div class="quiz-skip" id="quiz-retry">重新测一次</div>
+  </div>`;
+};
+function quizQuestion(){
   // question screen
   const Q=QUIZ[QZ.step];const prog=Math.round((QZ.step)/QUIZ.length*100);
   return `
@@ -393,7 +429,7 @@ routes.scene=()=>{
   <div class="sect"><div class="t"><small>Editor's pick</small>造夜人手记</div></div>
   <div class="pick" style="background-image:url('${(editor.images&&editor.images[0])||''}')" data-note="${editor.id}">
     <div class="tag">造夜人 @${esc(editor.author||'')}</div>
-    <div class="cap"><div class="nm" style="font-size:19px">${esc(editor.title)}</div>
+    <div class="cap"><div class="nm" style="font-size:18px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(editor.title)}</div>
       <div class="why">经 tonight 编辑精选 · 点开看完整手记</div></div>
   </div>
 
@@ -456,9 +492,9 @@ routes.spot=(id)=>{
     <div class="grad"></div>
   </div>
   <div class="dt-body">
-    <div class="dt-title">${esc(b.name)}</div>
+    <div class="dt-title">${esc((b.name||'').split(/[·・]/)[0].trim())}</div>
     <div class="dt-sub">${stars(b.rating)} <span>${esc(b.category)}</span> <span>${esc(b.region)}</span>
-      ${b.real_data?'<span class="flag real">真实档案 · '+(b.review_count||0)+' 条点评</span>':'<span class="flag">数据采集中</span>'}</div>
+      ${b.real_data?'<span class="flag real">真实档案 · '+(b.review_count||0)+' 条点评</span>':'<span class="flag">口碑陆续上新</span>'}</div>
 
     <div class="card-box">
       <div class="block-h">音乐 DNA <span class="flag ai">AI 推测</span></div>
@@ -484,7 +520,7 @@ routes.spot=(id)=>{
     </div>
     <div id="tag-reviews">${tagReviewsHtml(pos[0]?pos[0].name:'')}</div></div>`:`
     <div class="pending">
-      <div class="tx">该店口碑数据采集中</div>
+      <div class="tx">这家的口碑，正在路上</div>
       <div class="sx">基础信息（店名 / 评分 / 品类 / 营业）已是大众点评真实数据<br>评论与氛围标签将在爬虫补充采集后更新</div>
     </div>`}
 
@@ -631,7 +667,7 @@ routes.passport=()=>{
     <div class="hscroll" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div></div>
   <div class="slabel"><div class="st">攻略社区</div></div>
   <div class="pad">${D.posts.map(noteCard).join('')}</div>
-  <div class="prov" style="margin:4px 20px">护照战绩为演示编排：机制真实，数字以真实活动价格 / 小红书互动量做种子</div>
+
   <div style="height:110px"></div>`;
 };
 function noteCard(p){const m=p.metrics||{};return `<div class="note-card" data-note="${p.id}">
@@ -664,16 +700,16 @@ function bindView(name){
   document.querySelectorAll('[data-note]').forEach(el=>el.onclick=()=>go('#note/'+el.dataset.note));
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
   document.querySelectorAll('[data-toast]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();toast(el.dataset.toast);});
+  document.querySelectorAll('[data-stop]').forEach(el=>el.addEventListener('click',e=>e.stopPropagation()));
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
   document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
   // map filters (category + genre + feature, stackable)
   document.querySelectorAll('[data-mfc]').forEach(el=>el.onclick=()=>{MAP_FILTER.cat=el.dataset.mfc;render();});
   document.querySelectorAll('[data-mfg]').forEach(el=>el.onclick=()=>{MAP_FILTER.genre=el.dataset.mfg;render();});
   document.querySelectorAll('[data-mff]').forEach(el=>el.onclick=()=>{MAP_FILTER.feat=el.dataset.mff;render();});
-  // daily mood (3 quick questions) → re-rank picks
-  document.querySelectorAll('[data-moodk]').forEach(el=>el.onclick=()=>{
-    const k=el.dataset.moodk;MOOD[k]=(MOOD[k]===el.dataset.moodv)?undefined:el.dataset.moodv;render();});
-  const mc=$('[data-moodclear]'); if(mc) mc.onclick=()=>{MOOD={};render();};
+  // mood popup open/clear
+  document.querySelectorAll('[data-moodopen]').forEach(el=>el.onclick=()=>openMood());
+  const mc=$('[data-moodclear]'); if(mc) mc.onclick=()=>{MOOD={};saveMood();render();};
   // week day tabs
   document.querySelectorAll('[data-wd]').forEach(el=>el.onclick=()=>{WK_DAY=el.dataset.wd;render();});
   // clickable atmosphere tag -> scroll to linked reviews
@@ -695,8 +731,8 @@ function bindView(name){
     const html=cmtCard({nick:'我',ip:'上海',liked:0,content:v});
     $('#rv-list').insertAdjacentHTML('afterbegin',html);inp.value='';toast('评价已发布 ✓');
   };
-  // park map dots
-  if(name==='home'){renderDots();}
+  // park map dots (home + map both have #parkmap)
+  if(name==='home'||name==='map'){renderDots();}
 }
 function renderDots(){
   const pm=$('#parkmap'); if(!pm) return;
