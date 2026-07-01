@@ -160,6 +160,49 @@ function openMood(){
   wrap.querySelector('#mood-close').onclick=()=>closeModal();
 }
 function closeModal(){const w=document.getElementById('modal');if(w){w.className='';w.innerHTML='';}}
+/* ---- shareable card popup (persona / route / footprint) ---- */
+function openShareCard(kind){
+  const wrap=document.getElementById('modal');
+  const u=USER, p=u.persona;
+  let card='';
+  if(kind==='persona'){
+    const lab=p?p.label:'夜行玩家';
+    card=`<div class="sc-card sc-persona">
+      <div class="sc-brand">tonight</div>
+      <div class="sc-kick">MY NIGHTLIFE FREQUENCY</div>
+      <div class="sc-big">${esc(lab)}</div>
+      <div class="sc-tags">${p?`<span>${esc(GENRE_CN[p.genre]||p.genre)}</span><span>${esc(SOCIAL_LABEL[p.social]||'')}</span><span>${p.energy==='high'?'蹦到天亮':'聊到深夜'}</span>`:''}</div>
+      <div class="sc-foot">扫码测你的夜晚频率 · ${esc((u.loc||'静安寺商圈').replace('商圈',''))}</div>
+      <div class="sc-qr"></div></div>`;
+  }else if(kind==='route'){
+    const top=[...D.bars].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0))[0];const ev=D.events[0];
+    card=`<div class="sc-card sc-route">
+      <div class="sc-brand">tonight</div>
+      <div class="sc-kick">今夜路线 · MY NIGHT ROUTE</div>
+      <div class="sc-line"><b>21:00</b> 预热 · ${esc(top.name.split(/[·・]/)[0])}</div>
+      <div class="sc-line"><b>23:00</b> 主场 · ${esc(ev.venue||'')}</div>
+      <div class="sc-line"><b>02:00</b> 续摊 · 附近夜宵</div>
+      <div class="sc-foot">和我一起 · 扫码组局</div>
+      <div class="sc-qr"></div></div>`;
+  }else{ // footprint
+    const s=u.stamps||18;
+    card=`<div class="sc-card sc-foot2">
+      <div class="sc-brand">tonight</div>
+      <div class="sc-kick">MY NIGHT FOOTPRINT</div>
+      <div class="sc-big" style="font-size:44px">${s}<span style="font-size:16px"> 章</span></div>
+      <div class="sc-tags"><span>造夜人 Lv.${(p&&4)||4}</span><span>带过 37 人</span></div>
+      <div class="sc-foot">我的夜行足迹 · 扫码加入 tonight</div>
+      <div class="sc-qr"></div></div>`;
+  }
+  wrap.innerHTML=`<div class="sheet sc-sheet">
+    <div class="sheet-grip"></div>
+    ${card}
+    <button class="cta-solid" id="sc-save">保存到相册</button>
+    <div class="quiz-skip" id="sc-close">关闭</div></div>`;
+  wrap.className='show';
+  wrap.querySelector('#sc-save').onclick=()=>{closeModal();toast('已保存分享卡到相册');};
+  wrap.querySelector('#sc-close').onclick=()=>closeModal();
+}
 const TODAY='2026-06-30';
 function barGenres(b){return (b.dna||[]).map(g=>g.genre);}
 function allGenres(){
@@ -344,6 +387,7 @@ routes.quiz=()=>{
       <div class="ploc">已定位 · ${esc((a.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 为你锁定附近对味场子</div>
     </div>
     <button class="btn warm" id="quiz-done">进入今夜</button>
+    <div class="quiz-skip" data-share="persona">生成我的频率卡 · 分享</div>
     <div class="quiz-skip" id="quiz-retry">重新测一次</div>
   </div>`;
 };
@@ -638,7 +682,7 @@ routes.crew=()=>{
     <div style="font-size:13px;color:var(--sub);margin-top:8px">成团进度 · 还差 <b style="color:#fff">2 人</b>解锁卡座升级</div>
     <div class="progress"><i style="width:66%"></i></div>
     <div class="tags-wrap"><span class="tg on">满2人 门票9折</span><span class="tg on">满4人 酒水券</span><span class="tg">满6人 卡座升级</span></div>
-    <button class="btn" style="margin-top:14px" data-toast="组局已发起，分享卡已生成">发起局 · 生成邀请海报</button>
+    <button class="btn" style="margin-top:14px" data-share="route">发起局 · 生成邀请海报</button>
     <div class="prov">被邀请人真实成交 → 自动触发单层归因分佣（造夜人战绩 +1）</div></div>
   <div style="height:110px"></div>`;
 };
@@ -666,7 +710,8 @@ routes.passport=()=>{
   <div class="slabel"><div class="st">夜行足迹</div></div>
   <div class="card-box" style="margin:0 20px"><div style="font-size:13px;color:var(--sub)">已集 ${u.stamps}/${u.stamp_target} 章 · 集齐解锁年度足迹卡</div>
     <div class="progress"><i style="width:${(u.stamps/u.stamp_target*100).toFixed(0)}%"></i></div>
-    <div class="hscroll" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div></div>
+    <div class="hscroll" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div>
+    <button class="cta-solid" style="margin-top:10px" data-share="foot">生成我的夜行足迹卡 · 分享</button></div>
   <div class="slabel"><div class="st">攻略社区</div></div>
   <div class="pad">${D.posts.map(noteCard).join('')}</div>
 
@@ -703,6 +748,7 @@ function bindView(name){
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
   document.querySelectorAll('[data-toast]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();toast(el.dataset.toast);});
   document.querySelectorAll('[data-stop]').forEach(el=>el.addEventListener('click',e=>e.stopPropagation()));
+  document.querySelectorAll('[data-share]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();openShareCard(el.dataset.share);});
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
   document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
   // map filters (category + genre + feature, stackable)
