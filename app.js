@@ -490,33 +490,63 @@ routes.scene=()=>{
   <div style="height:110px"></div>`;
 };
 
-/* ================= RANK (实时投票榜 + 评价) ================= */
+/* ================= RANK (分层编辑榜 + 投票) ================= */
+let RANK_SCOPE='city'; // city | near
 routes.rank=()=>{
-  // LAGOM hard-locked #1, rest by votes desc
-  const rest=D.bars.filter(b=>b.id!=='lagom').sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0));
   const lagom=D.bars.find(b=>b.id==='lagom');
-  const ranked=lagom?[lagom,...rest]:rest;
+  let pool=D.bars.filter(b=>b.id!=='lagom');
+  if(RANK_SCOPE==='near') pool=pool.filter(b=>(distKm(b.ll)??99)<=3);
+  const byVote=[...pool].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0));
+  // 殿堂 Top3: LAGOM 锁第一 + 票数前二
+  const hall=[lagom,byVote[0],byVote[1]].filter(Boolean);
+  // 正在升温: 4-8 名
+  const rising=byVote.slice(2,7);
+  // 藏在巷子里: 评分高但票数靠后
+  const hidden=[...pool].sort((a,b)=>(b.rating||0)-(a.rating||0)).filter(b=>byVote.indexOf(b)>10).slice(0,4);
   const totalVotes=Object.values(VOTES).reduce((a,b)=>a+b,0);
   return `
   <div class="cal-hero">
     <div class="kicker" style="color:#888">Live Ranking</div>
-    <div class="display" style="font-size:46px;margin-top:8px">今夜<br>谁最 IN</div>
+    <div class="display" style="font-size:44px;margin-top:8px">今夜<br>谁最 IN</div>
     <div class="sub">玩家真实投票 · 一店一票 · 商家不可买位</div>
-    <div class="sub" style="color:var(--lime);margin-top:10px">${totalVotes.toLocaleString()} 票 · 实时</div>
+    <div class="sub" style="color:var(--neon);margin-top:8px">${totalVotes.toLocaleString()} 票 · 实时</div>
+    <div class="hscroll" style="padding:14px 0 2px;margin:0 -20px 0">
+      <span class="chip ${RANK_SCOPE==='city'?'on':''}" data-scope="city" style="margin-left:20px">全城风云</span>
+      <span class="chip ${RANK_SCOPE==='near'?'on':''}" data-scope="near">你周边今夜</span>
+    </div>
   </div>
-  <div class="lb" id="lb">${ranked.map((b,i)=>lbItem(b,i)).join('')}</div>
-  <div style="height:22px"></div>`;
+
+  <div class="sect"><div class="t"><small>Hall of fame</small>本周殿堂</div></div>
+  <div class="podium">${hall.map((b,i)=>podiumCard(b,i)).join('')}</div>
+
+  ${rising.length?`<div class="sect"><div class="t"><small>Rising</small>正在升温</div></div>
+  <div class="lb">${rising.map((b,i)=>lbItem(b,i+4)).join('')}</div>`:''}
+
+  ${hidden.length?`<div class="sect"><div class="t"><small>Hidden gems</small>藏在巷子里</div></div>
+  <div class="lb">${hidden.map((b,i)=>lbItem(b,'·')).join('')}</div>`:''}
+  <div style="height:110px"></div>`;
 };
+function podiumCard(b,i){
+  const medal=['①','②','③'][i]||'';
+  return `<div class="pod ${i===0?'pod-1':''}" data-spot="${b.id}" style="background-image:url('${cover(b)}')">
+    <div class="pod-rank">${medal}</div>
+    ${b.real_data?'<span class="pod-flag">真实档案</span>':''}
+    <div class="pod-ov"><div class="pod-nm">${esc((b.name||'').split(/[·・]/)[0])}</div>
+      <div class="pod-meta">${stars(b.rating)} · ${esc((b.region||'').replace('商圈',''))}</div>
+      <div class="pod-vote"><button class="lb-vbtn" data-vote="${b.id}" data-stop>${MYVOTED[b.id]?'已投':'投票'}</button>
+        <span class="pod-vc" id="vc-${b.id}">${(VOTES[b.id]||0).toLocaleString()} 票</span></div>
+    </div></div>`;
+}
 function lbItem(b,i){
-  return `<div class="lb-item ${i===0?'first':''}" data-lb="${b.id}">
-    <span class="lb-no">${String(i+1).padStart(2,'0')}</span>
+  return `<div class="lb-item" data-lb="${b.id}">
+    <span class="lb-no">${typeof i==='number'?String(i+1).padStart(2,'0'):i}</span>
     <span class="lb-thumb" style="background-image:url('${cover(b)}')" data-spot="${b.id}"></span>
     <div class="lb-mid" data-spot="${b.id}">
-      <div class="lb-nm">${esc(b.name)}</div>
-      <div class="lb-sub">${stars(b.rating)} · ${esc(b.region)}</div>
+      <div class="lb-nm">${esc((b.name||'').split(/[·・]/)[0])}</div>
+      <div class="lb-sub">${stars(b.rating)} · ${esc((b.region||'').replace('商圈',''))}${RANK_SCOPE==='near'&&distKm(b.ll)!=null?' · '+distLabel(b):''}</div>
     </div>
     <div style="text-align:center">
-      <button class="lb-vbtn" data-vote="${b.id}">${MYVOTED[b.id]?'已投':'投票'}</button>
+      <button class="lb-vbtn" data-vote="${b.id}" data-stop>${MYVOTED[b.id]?'已投':'投票'}</button>
       <div class="lb-vcount" id="vc-${b.id}">${(VOTES[b.id]||0).toLocaleString()}</div>
     </div></div>`;
 }
@@ -749,6 +779,7 @@ function bindView(name){
   document.querySelectorAll('[data-toast]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();toast(el.dataset.toast);});
   document.querySelectorAll('[data-stop]').forEach(el=>el.addEventListener('click',e=>e.stopPropagation()));
   document.querySelectorAll('[data-share]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();openShareCard(el.dataset.share);});
+  document.querySelectorAll('[data-scope]').forEach(el=>el.onclick=()=>{RANK_SCOPE=el.dataset.scope;render();});
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
   document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
   // map filters (category + genre + feature, stackable)
@@ -766,12 +797,16 @@ function bindView(name){
     document.querySelectorAll('[data-tag]').forEach(x=>x.classList.toggle('on',x===el));
     const box=$('#tag-reviews'); if(box){box.innerHTML=tagReviewsHtml(name);box.scrollIntoView({behavior:'smooth',block:'center'});}
   });
-  // voting
+  // voting — 就地 +1 + 弹跳动效(不整页刷新,更顺滑)
   document.querySelectorAll('[data-vote]').forEach(el=>el.onclick=(e)=>{
     e.stopPropagation();const id=el.dataset.vote;
     if(MYVOTED[id]){toast('一店一票，今日已投');return;}
     MYVOTED[id]=true;VOTES[id]=(VOTES[id]||0)+1;
-    toast('投票成功 +1，榜单已更新');setTimeout(render,400);
+    el.textContent='已投';el.classList.add('voted');
+    const vc=document.getElementById('vc-'+id);
+    if(vc){const n=(VOTES[id]||0);vc.textContent=vc.textContent.includes('票')?n.toLocaleString()+' 票':n.toLocaleString();
+      vc.classList.remove('vc-pop');void vc.offsetWidth;vc.classList.add('vc-pop');}
+    toast('投票成功 +1');
   });
   // review publish
   const rb=$('[data-review]'); if(rb) rb.onclick=()=>{

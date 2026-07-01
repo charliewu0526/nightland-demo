@@ -462,3 +462,23 @@ body{
 .sc-foot{font-size:11px;color:rgba(255,255,255,.72);margin-top:auto;padding-top:16px}
 .sc-qr{position:absolute;bottom:20px;right:22px;width:56px;height:56px;border-radius:10px;
   background:#fff;background-image:repeating-linear-gradient(0deg,#000 0 4px,#fff 4px 8px),repeating-linear-gradient(90deg,#000 0 4px,transparent 4px 8px);opacity:.9}
+
+/* ===== rank: podium (殿堂 Top3) ===== */
+.podium{display:flex;flex-direction:column;gap:14px;padding:0 20px}
+.pod{position:relative;height:150px;border-radius:20px;overflow:hidden;background:#141416 center/cover;cursor:pointer;box-shadow:var(--shadow-soft)}
+.pod.pod-1{height:200px;box-shadow:0 12px 40px rgba(201,242,77,.2)}
+.pod::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.92) 6%,transparent 65%)}
+.pod-rank{position:absolute;top:12px;left:14px;z-index:2;font-family:"Archivo Black",sans-serif;font-size:26px;color:var(--neon);text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.pod.pod-1 .pod-rank{font-size:34px}
+.pod-flag{position:absolute;top:14px;right:14px;z-index:2;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;background:rgba(62,224,137,.16);color:#5ef0b0;border:1px solid rgba(62,224,137,.4)}
+.pod-ov{position:absolute;left:16px;right:16px;bottom:14px;z-index:2}
+.pod-nm{font-family:"Archivo Black",sans-serif;font-size:20px;color:#fff;letter-spacing:-.3px;line-height:1.02}
+.pod.pod-1 .pod-nm{font-size:26px}
+.pod-meta{font-size:11.5px;color:rgba(255,255,255,.8);margin-top:5px}
+.pod-vote{display:flex;align-items:center;gap:10px;margin-top:10px}
+.pod-vc{font-size:12px;font-weight:800;color:var(--neon)}
+/* voting button refined */
+.lb-vbtn{position:relative;overflow:hidden}
+.lb-vbtn.voted{background:rgba(255,255,255,.12);color:var(--neon);border:1px solid var(--line2)}
+@keyframes votepop{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
+.vc-pop{animation:votepop .4s var(--ease);color:var(--c-pink)!important}
