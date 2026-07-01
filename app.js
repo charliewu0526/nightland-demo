@@ -16,6 +16,7 @@ const IC={
 /* live vote state (mutable, seeded from real signals) */
 const VOTES = Object.assign({}, D.votes||{});
 const MYVOTED = {};
+const VISITED = {}; // 逛过的店(护照成长反馈)
 
 /* ---- user session: persona (from quiz) + current location ---- */
 const PROFILES={ // 商圈中心点(GCJ-02真实坐标) — 可切换的模拟定位
@@ -85,6 +86,23 @@ function radar(dna,size=150){
     ${grid}${axl}<polygon points="${dp.join(' ')}" fill="url(#rg)" fill-opacity=".45" stroke="url(#rg)" stroke-width="2"/></svg>`;
 }
 
+/* ---- donut ring (progress) ---- */
+function donut(pct,size=68,label='',sub=''){
+  const r=(size-10)/2,c=2*Math.PI*r,off=c*(1-pct/100);
+  return `<div class="ring-stat"><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="6"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--neon)" stroke-width="6" stroke-linecap="round"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 ${size/2} ${size/2})"/>
+    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="15" font-weight="800" font-family="Archivo Black">${pct}%</text></svg>
+    <div><div class="rs-t">${label}</div><div class="rs-s">${sub}</div></div></div>`;
+}
+/* dot matrix (weekly night heat) */
+function matrix(seed){
+  let h=0;for(const c of (seed||'x'))h=(h*31+c.charCodeAt(0))>>>0;
+  let cells='';for(let i=0;i<48;i++){h=(h*1103515245+12345)&0x7fffffff;const v=h%10;
+    cells+=`<i class="${v>7?'hi':v>4?'on':''}"></i>`;}
+  return `<div class="matrix">${cells}</div>`;
+}
 /* ---- router ---- */
 const routes={};
 function go(h){location.hash=h;}
@@ -93,7 +111,7 @@ function render(){
   // 问卷为可选入口(不强制拦截开屏 — 投资人/新用户可直接进首页)
   const fn=routes[name]||routes.home;app.scrollTop=0;
   app.innerHTML=`<div class="view">${fn(arg)}</div>`;
-  const tabFor={home:'home',spot:'home',map:'home',rank:'home',quiz:'home',event:'events',events:'events',note:'events',scene:'events',crew:'crew',passport:'passport'}[name]||'home';
+  const tabFor={home:'home',spot:'home',map:'home',rank:'home',route:'home',search:'home',quiz:'home',event:'events',events:'events',note:'events',scene:'events',crew:'crew',party:'crew',passport:'passport',report:'passport'}[name]||'home';
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.route===tabFor));
   bindView(name);
 }
@@ -271,19 +289,23 @@ routes.home=()=>{
     <div class="tb-loc"><span class="tb-hi">${USER.persona?esc(USER.persona.label):'今夜好'}</span>
       <span class="tb-city">${esc((USER.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 今夜</span></div>
     <div class="tb-actions">
-      <button class="icon-btn" data-scroll="discover">${IC.search}</button>
+      <button class="icon-btn" data-go="#search">${IC.search}</button>
       <button class="icon-btn" data-toast="今晚 3 个局在等你">${IC.bell}</button>
       <button class="icon-btn avatar" data-go="#passport"></button>
     </div>
   </div>
 
-  <div class="cover-hero" style="background-image:url('${covImg}')" data-spot="${covBar.id}">
-    <button class="fav-btn" data-toast="已收藏到你的夜单">${IC.heart}</button>
-    <div class="cap">
-      <div class="day">今夜为你 · ${covBar.real_data?'真实档案':'精选'}</div>
-      <div class="ttl">${esc((covBar.name||'').split(/[·・]/)[0].trim())}</div>
-      <div class="loc">${esc(covBar.category||'')} · ${esc((covBar.region||'').replace('商圈',''))}${covDist?' · '+covDist:''}</div>
+  <div class="cover-wrap">
+    <div class="cover-track" id="cover-track">
+      ${picks.map((b,i)=>`<div class="cover-hero" style="background-image:url('${cover(b)}')" data-spot="${b.id}">
+        <button class="fav-btn" data-toast="已收藏到你的夜单" data-stop>${IC.heart}</button>
+        <div class="cap">
+          <div class="day">今夜为你 · ${b.real_data?'真实档案':'精选'}</div>
+          <div class="ttl">${esc((b.name||'').split(/[·・]/)[0].trim())}</div>
+          <div class="loc">${esc(b.category||'')} · ${esc((b.region||'').replace('商圈',''))}${distLabel(b)?' · '+distLabel(b):''}</div>
+        </div></div>`).join('')}
     </div>
+    <div class="cover-dots">${picks.map((_,i)=>`<i class="${i===0?'on':''}"></i>`).join('')}</div>
   </div>
 
   <div class="mood-strip" data-moodopen>
@@ -310,7 +332,7 @@ routes.home=()=>{
         <div class="why">${pickWhy[i]||esc(b.region)}</div></div>
     </div>`).join('')}
 
-  <div class="concierge" data-toast="正在为你规划今晚：预热 → 主场 → 续摊">
+  <div class="concierge" data-go="#route">
     <div class="cc-l"><div class="ct">懒得选？让我安排今晚</div>
       <div class="cs">口味 + 人数 + 区域，一条完整夜路线</div></div>
     <div class="cc-arr">${IC.arrow}</div>
@@ -406,6 +428,68 @@ function quizQuestion(){
     </div>
     ${QZ.step>0?`<div class="quiz-skip" id="quiz-back">← 上一题</div>`:`<div class="quiz-skip" id="quiz-skipall">跳过，直接逛</div>`}
   </div>`;
+};
+
+/* ================= SEARCH · 真实搜索 ================= */
+let SEARCH_Q='';
+routes.search=()=>{
+  const q=SEARCH_Q.trim().toLowerCase();
+  let bars=[],events=[];
+  if(q){
+    bars=D.bars.filter(b=>(b.name||'').toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q)
+      ||(b.region||'').toLowerCase().includes(q)||(b.dna||[]).some(g=>(g.cn||'').toLowerCase().includes(q)||(g.genre||'').toLowerCase().includes(q))).slice(0,10);
+    events=D.events.filter(e=>(e.title||'').toLowerCase().includes(q)||(e.venue||'').toLowerCase().includes(q)).slice(0,6);
+  }
+  const hot=['Techno','Disco','爵士','露台','静安寺','女生友好'];
+  return `
+  <div class="cal-hero" style="padding:44px 20px 10px"><button class="dt-back" data-back>‹</button>
+    <div class="search-box"><span class="sb-ic">${IC.search}</span>
+      <input id="search-in" placeholder="搜场所、活动、曲风、氛围…" value="${esc(SEARCH_Q)}" autofocus></div></div>
+  ${!q?`<div class="pad"><div class="block-h" style="margin:14px 0 10px">热门搜索</div>
+    <div class="tags-wrap">${hot.map(h=>`<span class="tg" data-hotq="${esc(h)}">${esc(h)}</span>`).join('')}</div></div>`:`
+  <div class="pad">
+    ${bars.length?`<div class="block-h" style="margin:14px 0 8px">场所 · ${bars.length}</div>
+      <div class="cardlist">${bars.map(nearCard).join('')}</div>`:''}
+    ${events.length?`<div class="block-h" style="margin:18px 0 8px">活动 · ${events.length}</div>
+      <div class="cardlist">${events.map(evRow).join('')}</div>`:''}
+    ${!bars.length&&!events.length?`<div class="pending" style="margin:20px"><div class="tx">没找到「${esc(SEARCH_Q)}」</div><div class="sx">换个曲风或区域试试</div></div>`:''}
+  </div>`}
+  <div style="height:110px"></div>`;
+};
+
+/* ================= ROUTE · AI 夜晚管家路线 ================= */
+routes.route=()=>{
+  const near=byNearest(D.bars.filter(b=>b.id!=='lagom'));
+  const warm=D.bars.find(b=>b.id==='lagom')||near[0];         // 预热:清吧/近
+  const main=[...D.bars].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0))[0]; // 主场:人气
+  const ev=D.events[0];
+  const after=near.find(b=>b.id!==warm.id&&b.id!==main.id)||near[1]||near[0];
+  const p=USER.persona;
+  const stops=[
+    {t:'21:00',tag:'预热',b:warm,why:p?`${esc(GENRE_CN[p.genre]||'对味')}慢启动 · 先喝一杯定调`:'先喝一杯，慢慢进入状态'},
+    {t:'23:00',tag:'主场',b:main,why:`今夜人气最高 · ${ev?esc(ev.title):'主舞池开场'}`},
+    {t:'02:00',tag:'续摊',b:after,why:'热度未散 · 换个场子接着聊'},
+  ];
+  return `
+  <div class="cal-hero"><button class="dt-back" data-back>‹</button>
+    <div class="kicker">AI Night Concierge</div>
+    <div class="h1" style="margin-top:8px">今夜路线</div>
+    <div class="sub">为 ${p?esc(p.label):'你'} · ${esc((USER.loc||'静安寺商圈').replace('商圈',''))}${moodAnswered()?' · 今晚想「'+esc(moodLabel())+'」':''} 定制</div></div>
+  <div class="rtline">
+    ${stops.map((s,i)=>`<div class="rt-stop">
+      <div class="rt-time"><span class="rt-dot"></span>${s.t}<small>${s.tag}</small></div>
+      <div class="rt-card" data-spot="${s.b.id}" style="background-image:url('${cover(s.b)}')">
+        <div class="rt-ov"><div class="rt-nm">${esc((s.b.name||'').split(/[·・]/)[0])}</div>
+          <div class="rt-meta">${esc(s.b.category||'')} · ${esc((s.b.region||'').replace('商圈',''))}${distLabel(s.b)?' · '+distLabel(s.b):''}</div>
+          <div class="rt-why">${s.why}</div></div>
+        <button class="rt-nav" data-nav="${esc(s.b.name)}" data-stop>${IC.pin}</button>
+      </div></div>`).join('')}
+  </div>
+  <div class="pad" style="margin-top:8px">
+    <button class="cta-solid" data-share="route">生成路线卡 · 叫上朋友</button>
+    <div class="prov" style="text-align:center">路线由 AI 夜晚管家按你的人格×心情×位置生成</div>
+  </div>
+  <div style="height:120px"></div>`;
 };
 
 /* ================= MAP (夜上海) ================= */
@@ -580,6 +664,8 @@ routes.spot=(id)=>{
     <div class="dt-title">${esc((b.name||'').split(/[·・]/)[0].trim())}</div>
     <div class="dt-sub">${stars(b.rating)} <span>${esc(b.category)}</span> <span>${esc(b.region)}</span>
       ${b.real_data?'<span class="flag real">真实档案 · '+(b.review_count||0)+' 条点评</span>':'<span class="flag">口碑陆续上新</span>'}</div>
+    <div class="avstack" style="margin:10px 0 4px"><div class="avs">${D.bars.slice(2,7).map(x=>`<i style="background-image:url('${cover(x)}')"></i>`).join('')}</div>
+      <div class="avtxt"><b>${34+(((b.id||'').length*7)%80)}</b> 人今晚想去这儿</div></div>
 
     <div class="card-box">
       <div class="block-h">音乐 DNA <span class="flag ai">AI 推测</span></div>
@@ -692,6 +778,8 @@ routes.event=(id)=>{
     <div class="dt-title">${esc(e.title)}</div>
     ${e.title_en?`<div class="dt-en">${esc(e.title_en)}</div>`:''}
     <div class="dt-sub">${esc(e.venue||'')}</div>
+    <div class="avstack" style="margin:8px 0 4px"><div class="avs">${D.bars.slice(3,8).map(x=>`<i style="background-image:url('${cover(x)}')"></i>`).join('')}</div>
+      <div class="avtxt"><b>+${120+(((e.id||'').length*13)%260)}</b> 人感兴趣</div></div>
     <div class="tags-wrap">${(e.tags||[]).map(t=>`<span class="tg">${esc(t)}</span>`).join('')}</div>
     ${e.dna&&e.dna.length?`<div class="card-box"><div class="block-h">现场曲风预告 <span class="flag ai">AI 推测</span></div>
       <div class="tags-wrap">${e.dna.map(g=>`<span class="tg" style="border-color:${GCOLOR[g.genre]||'#444'};color:${GCOLOR[g.genre]||'#ccc'}">${esc(g.cn)} ${g.pct}%</span>`).join('')}</div></div>`:''}
@@ -703,9 +791,36 @@ routes.event=(id)=>{
   </div>
   <div class="cta-bar">
     <button class="btn ghost" data-nav="${esc(e.venue||e.title)}">导航</button>
-    <button class="btn warm" data-toast="已报名，电子票在「我的」">报名 / 购票</button>
+    <button class="btn warm" data-ticket="${e.id}">报名 / 购票</button>
   </div>`;
 };
+/* 电子票凭证弹窗 (uptix 式) */
+function openTicket(eid){
+  const e=D.events.find(x=>x.id===eid)||D.events[0];
+  const wrap=document.getElementById('modal');
+  wrap.innerHTML=`<div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="ticket">
+      <div class="tk-top">
+        <div class="tk-brand">tonight</div>
+        <div class="tk-title">${esc(e.title)}</div>
+        <div class="tk-venue">${esc(e.venue||'')}</div>
+      </div>
+      <div class="tk-perf">
+        <div><div class="tk-k">日期</div><div class="tk-v">${esc((e.start||'').slice(0,10)||e.date_text||'今夜')}</div></div>
+        <div><div class="tk-k">开场</div><div class="tk-v">${esc(e.start_time?e.start_time.slice(11,16):'22:00')}</div></div>
+        <div><div class="tk-k">票种</div><div class="tk-v">${esc(e.price||'入场票')}</div></div>
+      </div>
+      <div class="tk-tear"></div>
+      <div class="tk-qr"><div class="sc-qr" style="position:static;width:110px;height:110px"></div>
+        <div class="tk-code">TN-${(eid||'').toString().slice(-6).toUpperCase().padStart(6,'0')} · 到场核销</div></div>
+    </div>
+    <button class="cta-solid" id="tk-save">保存电子票</button>
+    <div class="quiz-skip" id="tk-close">关闭</div></div>`;
+  wrap.className='show';
+  wrap.querySelector('#tk-save').onclick=()=>{closeModal();toast('电子票已保存 · 到场出示二维码');};
+  wrap.querySelector('#tk-close').onclick=()=>closeModal();
+}
 
 /* ================= CREW (组局) ================= */
 routes.crew=()=>{
@@ -722,21 +837,57 @@ routes.crew=()=>{
     <div style="font-size:13px;line-height:2;background:var(--card2);border-radius:14px;padding:14px;margin-top:10px">
       <b>21:00 预热</b> · ${esc(top.name)}<br><b>23:00 主场</b> · ${esc(ev.venue||'')} — ${esc(ev.title)}<br><b>02:00 续摊</b> · 附近夜宵</div>
     <button class="btn warm" style="margin-top:14px" data-toast="路线已保存，可一键叫人">生成今晚路线</button></div>
-  <div class="slabel"><div class="st">今晚谁有空</div></div>
-  <div class="card-box" style="margin:0 20px">${f.map(x=>`<div class="friend"><span class="av">${esc((x.nick||'?')[0])}</span>
-    <div style="flex:1"><div style="font-weight:700">${esc(x.nick)}</div>
+  <div class="slabel"><div class="st">今晚谁有空</div><div class="all">同频率优先</div></div>
+  <div class="card-box" style="margin:0 20px">${f.map((x,i)=>{const freq=[92,78,65][i%3];return `<div class="friend"><span class="av">${esc((x.nick||'?')[0])}</span>
+    <div style="flex:1"><div style="font-weight:700">${esc(x.nick)} <span class="freq-tag">同频 ${freq}%</span></div>
     <div style="font-size:12px;color:var(--sub)">${esc(x.status)}${x.spot?' · '+esc(x.spot):''}</div></div>
-    ${x.spot?'<span class="dot-on"></span>':'<span class="chip">叫TA</span>'}</div>`).join('')}</div>
+    ${x.spot?'<span class="dot-on"></span>':'<span class="chip">叫TA</span>'}</div>`;}).join('')}
+    <div class="prov">同频率 = 音乐人格匹配度（协调已有关系，不做陌生人匹配）</div></div>
   <div class="slabel"><div class="st">发起局</div></div>
-  <div class="card-box" style="margin:0 20px">
+  <div class="card-box" style="margin:0 20px 20px;cursor:pointer" data-go="#party">
     <div style="font-weight:800;font-size:15px">${esc(ev.title)}</div>
     <div style="font-size:12px;color:var(--neon);margin:6px 0">${esc(ev.venue||'')}</div>
     <div style="font-size:13px;color:var(--sub);margin-top:8px">成团进度 · 还差 <b style="color:#fff">2 人</b>解锁卡座升级</div>
-    <div class="progress"><i style="width:66%"></i></div>
+    <div class="progress big"><i style="width:66%" class="prog-anim"></i></div>
     <div class="tags-wrap"><span class="tg on">满2人 门票9折</span><span class="tg on">满4人 酒水券</span><span class="tg">满6人 卡座升级</span></div>
-    <button class="btn" style="margin-top:14px" data-share="route">发起局 · 生成邀请海报</button>
-    <div class="prov">被邀请人真实成交 → 自动触发单层归因分佣（造夜人战绩 +1）</div></div>
+    <button class="btn" style="margin-top:14px" data-go="#party">查看这个局 →</button></div>
   <div style="height:110px"></div>`;
+};
+
+/* ================= PARTY · 组局详情 ================= */
+routes.party=()=>{
+  const ev=D.events[0];const f=D.seed.friends_online;
+  const members=['你','咖咖','泡泡','阿电'];
+  return `
+  <div class="dt-hero ${(ev.images&&ev.images[0])?'':'noimg'}"><button class="dt-back" data-back>‹</button>
+    ${(ev.images&&ev.images[0])?`<img src="${ev.images[0]}" loading="lazy">`:''}<div class="grad"></div></div>
+  <div class="dt-body">
+    <div class="dt-title">${esc(ev.title)}</div>
+    <div class="dt-sub">${esc(ev.venue||'')}${ev.start_time?' · '+esc(ev.start_time.slice(11,16))+' 开场':''}</div>
+
+    <div class="card-box"><div class="block-h">成团进度</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="avstack"><div class="avs">${members.map(m=>`<i style="background-image:url('${cover(D.bars[Math.floor(Math.random()*20)])}')"></i>`).join('')}</div></div>
+        <div style="font-size:13px;color:var(--sub)">已 <b style="color:#fff">4</b> 人 · 还差 <b style="color:var(--neon)">2</b> 人</div>
+      </div>
+      <div class="progress big" style="margin-top:12px"><i style="width:66%" class="prog-anim"></i></div>
+      <div class="tags-wrap" style="margin-top:12px">
+        <span class="tg on">满2人 门票9折 ✓</span><span class="tg on">满4人 酒水券 ✓</span><span class="tg">满6人 卡座升级</span></div>
+    </div>
+
+    <div class="card-box"><div class="block-h">局成员</div>
+      ${members.map((m,i)=>`<div class="friend"><span class="av">${esc(m[0])}</span>
+        <div style="flex:1"><div style="font-weight:700">${esc(m)}${i===0?' · 发起人':''}</div>
+        <div style="font-size:12px;color:var(--sub)">${['深夜Techno社交家','复古Disco团魂','微醺爵士','现场派'][i]||'夜行玩家'}</div></div>
+        ${i===0?'<span class="freq-tag">你</span>':'<span class="dot-on"></span>'}</div>`).join('')}
+    </div>
+
+    <div class="prov" style="margin:8px 0">被邀请人真实成交 → 自动触发单层归因分佣（造夜人战绩 +1）· 不做陌生人匹配</div>
+  </div>
+  <div class="cta-bar">
+    <button class="btn ghost" data-nav="${esc(ev.venue||ev.title)}">导航</button>
+    <button class="btn warm" data-share="route">邀请海报 · 叫上朋友</button>
+  </div>`;
 };
 
 /* ================= PASSPORT (护照 + 钱包) ================= */
@@ -760,10 +911,26 @@ routes.passport=()=>{
     <div style="display:flex;gap:10px;margin-top:14px"><button class="btn" style="background:#0b0b0f;color:var(--neon)" data-toast="提现申请已提交">提现</button>
       <button class="btn" style="background:rgba(0,0,0,.15);color:#0b0b0f" data-toast="可兑换酒水券/门票/卡座">兑换权益</button></div></div>
   <div class="slabel"><div class="st">夜行足迹</div></div>
-  <div class="card-box" style="margin:0 20px"><div style="font-size:13px;color:var(--sub)">已集 ${u.stamps}/${u.stamp_target} 章 · 集齐解锁年度足迹卡</div>
-    <div class="progress"><i style="width:${(u.stamps/u.stamp_target*100).toFixed(0)}%"></i></div>
-    <div class="hscroll" style="padding:6px 0">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div>
+  <div class="card-box" style="margin:0 20px">
+    ${donut(Math.round(u.stamps/u.stamp_target*100),72,`${u.stamps}/${u.stamp_target} 章`,`再集 ${u.stamp_target-u.stamps} 章解锁年度足迹卡`)}
+    <div class="hscroll" style="padding:12px 0 2px">${D.bars.slice(0,8).map(b=>`<span class="lb-thumb" style="background-image:url('${cover(b)}');flex:0 0 50px;width:50px;height:50px"></span>`).join('')}</div>
     <button class="cta-solid" style="margin-top:10px" data-share="foot">生成我的夜行足迹卡 · 分享</button></div>
+
+  <div class="slabel"><div class="st">造夜人战绩</div></div>
+  <div class="card-box" style="margin:0 20px">
+    <div style="margin-bottom:14px">${donut(Math.min(99,Math.round(u.promoter.gmv/300)),72,`¥${(u.promoter.gmv/1000).toFixed(1)}K`,`带客成交 · 城市排名 #${u.promoter.rank_no}`)}</div>
+    <div style="font-size:12px;color:var(--sub);margin-bottom:8px">本周夜行热力</div>
+    ${matrix('leo-week')}
+    <div class="prov">越活跃 · 等级与分佣越高（数字以真实活动价格/互动量做种子）</div></div>
+
+  <div class="slabel"><div class="st">年度报告</div><div class="all" data-share="foot">生成 →</div></div>
+  <div class="report-teaser" data-share="foot">
+    <div class="rt-yr">2026</div>
+    <div class="rt-cap"><div class="rt-t">我的夜晚年度报告</div>
+      <div class="rt-s">18 个夜晚 · 12 家场子 · 深夜 Techno 党 · 一键生成可炫耀长图</div></div>
+    <div class="cc-arr" style="flex:0 0 40px">${IC.arrow}</div>
+  </div>
+
   <div class="slabel"><div class="st">攻略社区</div></div>
   <div class="pad">${D.posts.map(noteCard).join('')}</div>
 
@@ -803,6 +970,15 @@ function bindView(name){
   document.querySelectorAll('[data-share]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();openShareCard(el.dataset.share);});
   document.querySelectorAll('[data-scope]').forEach(el=>el.onclick=()=>{RANK_SCOPE=el.dataset.scope;render();});
   document.querySelectorAll('[data-evview]').forEach(el=>el.onclick=()=>{EV_VIEW=el.dataset.evview;render();});
+  document.querySelectorAll('[data-ticket]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();openTicket(el.dataset.ticket);});
+  // real search
+  const si=$('#search-in'); if(si){ si.focus();
+    si.oninput=()=>{SEARCH_Q=si.value;const pos=si.selectionStart;render();const n=$('#search-in');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
+  }
+  document.querySelectorAll('[data-hotq]').forEach(el=>el.onclick=()=>{SEARCH_Q=el.dataset.hotq;render();});
+  // cover carousel: scroll → active dot
+  const ct=$('#cover-track'); if(ct){const dots=[...ct.parentElement.querySelectorAll('.cover-dots i')];
+    ct.onscroll=()=>{const i=Math.round(ct.scrollLeft/ct.clientWidth);dots.forEach((d,k)=>d.classList.toggle('on',k===i));};}
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
   document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
   // map filters (category + genre + feature, stackable)
@@ -851,6 +1027,9 @@ function bindView(name){
   const qr=$('#quiz-retry'); if(qr) qr.onclick=()=>{QZ.step=0;QZ.ans={};render();};
   // park map dots (home + map both have #parkmap)
   if(name==='home'||name==='map'){renderDots();}
+  // 逛得越多 → 护照悄悄成长(进店详情时轻反馈,每店一次)
+  if(name==='spot'){const id=(location.hash.split('/')[1]||'');
+    if(id && !VISITED[id]){VISITED[id]=1;setTimeout(()=>toast('夜行足迹 +1 · 已记入你的护照'),700);}}
   // map bottom-sheet drag (Airbnb/高德 style, 3 snaps)
   if(name==='map') bindMapSheet();
 }
