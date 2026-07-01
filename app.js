@@ -731,6 +731,18 @@ function bindView(name){
     const html=cmtCard({nick:'我',ip:'上海',liked:0,content:v});
     $('#rv-list').insertAdjacentHTML('afterbegin',html);inp.value='';toast('评价已发布 ✓');
   };
+  // ---- quiz onboarding bindings ----
+  document.querySelectorAll('[data-qk]').forEach(el=>el.onclick=()=>{
+    QZ.ans[el.dataset.qk]=el.dataset.qv;
+    if(el.dataset.qk==='loc') setLoc(el.dataset.qv);
+    QZ.step++;
+    if(QZ.step>=QUIZ.length) buildPersona();
+    render();
+  });
+  const qb=$('#quiz-back'); if(qb) qb.onclick=()=>{QZ.step=Math.max(0,QZ.step-1);render();};
+  const qs=$('#quiz-skipall'); if(qs) qs.onclick=()=>{USER.done=true;saveUser();go('#home');};
+  const qd=$('#quiz-done'); if(qd) qd.onclick=()=>{go('#home');};
+  const qr=$('#quiz-retry'); if(qr) qr.onclick=()=>{QZ.step=0;QZ.ans={};render();};
   // park map dots (home + map both have #parkmap)
   if(name==='home'||name==='map'){renderDots();}
 }
