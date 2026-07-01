@@ -479,16 +479,25 @@ routes.scene=()=>{
       <div class="why">经 tonight 编辑精选 · 点开看完整手记</div></div>
   </div>
 
-  <div class="sect"><div class="t"><small>Vibe check</small>今夜现场</div></div>
-  <div class="cardlist">
-    ${vibes.map(v=>`<div class="spot" style="height:200px;background-image:url('${cover(v.b)}')" data-spot="${v.b.id}">
-      <div class="badge">${esc(v.b.region)}</div>
-      <div class="ov"><div class="nm" style="font-size:17px">${esc(v.b.name)}</div>
-        <div class="meta" style="font-size:13px;color:#fff">${esc(v.txt)}</div></div></div>`).join('')}
-  </div>
-  <div class="prov" style="margin:8px 20px">现场 vibe 与手记为氛围演示；评测原始数据退至后台，仅作口碑标签与选品洞察</div>
+  <div class="sect"><div class="t"><small>Vibe check</small>今夜现场</div>
+    <div class="all" data-share="foot">晒我的夜晚 →</div></div>
+  <div class="waterfall">${waterfallVibes()}</div>
+  <div class="prov" style="margin:12px 20px">现场 vibe 与手记为氛围演示；评测原始数据退至后台，仅作口碑标签与选品洞察</div>
   <div style="height:110px"></div>`;
 };
+/* 双列瀑布流 vibe 切片(高低错落) */
+function waterfallVibes(){
+  const lines=['露台风很轻，杯子里是一抹清幽。','低频压到胸口，今晚不想回家。','霓虹打在脸上，谁还看时间。',
+    '第一杯特调下肚，夜才刚开始。','屋顶的风和 disco 一样上头。','人不多，但每个都会跳。','驻场今晚放的全是我的歌。','散场那刻最舍不得。'];
+  const pool=[D.bars.find(b=>b.id==='lagom'),...D.bars.filter(b=>b.id!=='lagom')].filter(Boolean).slice(0,8);
+  const nicks=['咖咖','泡泡','阿电','小野','Leo','兔子','阿K','鹿鹿'];
+  const cards=pool.map((b,i)=>({b,txt:lines[i%lines.length],nick:nicks[i%nicks.length],h:i%2?230:180}));
+  const colA=cards.filter((_,i)=>i%2===0), colB=cards.filter((_,i)=>i%2===1);
+  const col=arr=>arr.map(c=>`<div class="wf-card" style="height:${c.h}px;background-image:url('${cover(c.b)}')" data-spot="${c.b.id}">
+    <div class="wf-ov"><div class="wf-nick">@${esc(c.nick)} · ${esc((c.b.region||'').replace('商圈',''))}</div>
+      <div class="wf-txt">${esc(c.txt)}</div></div></div>`).join('');
+  return `<div class="wf-col">${col(colA)}</div><div class="wf-col">${col(colB)}</div>`;
+}
 
 /* ================= RANK (分层编辑榜 + 投票) ================= */
 let RANK_SCOPE='city'; // city | near
@@ -636,22 +645,35 @@ function tagReviewsHtml(tagName){
 }
 
 /* ================= EVENTS CALENDAR (全部活动, 按日期分组) ================= */
+let EV_VIEW='axis'; // axis(时刻表) | date(日历)
+function evHour(e){const t=e.start_time||'';const m=t.slice(11,16);return m?parseInt(m.slice(0,2),10):null;}
 routes.events=()=>{
   const all=[...D.events].sort((a,b)=>(a.start||'').localeCompare(b.start||''));
-  // group by date
-  const groups={};
-  all.forEach(e=>{const d=(e.start||'').slice(0,10)||'近期';(groups[d]=groups[d]||[]).push(e);});
-  const dates=Object.keys(groups).sort().reverse();
+  let body='';
+  if(EV_VIEW==='axis'){
+    // 按开场时段分:黄昏(<20)/前夜(20-23)/深夜(>=23或次日)
+    const seg=[{k:'黄昏场',s:'18:00 起',f:e=>{const h=evHour(e);return h!=null&&h<20;}},
+      {k:'前夜场',s:'20:00–23:00',f:e=>{const h=evHour(e);return h!=null&&h>=20&&h<23;}},
+      {k:'深夜场',s:'23:00 之后',f:e=>{const h=evHour(e);return h==null||h>=23||h<6;}}];
+    body=seg.map(g=>{const list=all.filter(g.f);if(!list.length)return '';
+      return `<div class="axis-seg"><div class="axis-h"><span class="axis-dot"></span>${g.k}<small>${g.s} · ${list.length} 场</small></div>
+        <div class="cardlist">${list.map(evRow).join('')}</div></div>`;}).join('');
+  }else{
+    const groups={};all.forEach(e=>{const d=(e.start||'').slice(0,10)||'近期';(groups[d]=groups[d]||[]).push(e);});
+    const dates=Object.keys(groups).sort().reverse();
+    body=dates.map(d=>`<div class="datehead">${dayLabel(d)} <span class="cnt">${d!=='近期'?d:''} · ${groups[d].length} 场</span></div>
+      <div class="cardlist">${groups[d].map(evRow).join('')}</div>`).join('');
+  }
   return `
-  <div class="cal-hero"><button class="dt-back" data-back>‹</button>
-    <div class="kicker">Calendar</div>
-    <div class="h1" style="margin-top:8px">活动日历</div>
-    <div class="sub">${D.meta.events_count} 场 · 最新优先</div></div>
-  <div style="padding:0 0 110px">
-    ${dates.map(d=>`
-      <div class="datehead">${dayLabel(d)} <span class="cnt">${d!=='近期'?d:''} · ${groups[d].length} 场</span></div>
-      <div class="cardlist">${groups[d].map(evRow).join('')}</div>`).join('')}
-  </div>`;
+  <div class="cal-hero">
+    <div class="kicker">Timetable</div>
+    <div class="h1" style="margin-top:8px">时刻表</div>
+    <div class="sub">${D.meta.events_count} 场今夜活动 · 跟着时间轴走</div>
+    <div class="hscroll" style="padding:14px 0 2px;margin:0 -20px 0">
+      <span class="chip ${EV_VIEW==='axis'?'on':''}" data-evview="axis" style="margin-left:20px">时刻表</span>
+      <span class="chip ${EV_VIEW==='date'?'on':''}" data-evview="date">按日期</span>
+    </div></div>
+  <div style="padding:6px 0 110px">${body}</div>`;
 };
 function evRow(e){
   return `<div class="spot" data-event="${e.id}" style="height:170px;background-image:url('${(e.images&&e.images[0])||''}')">
@@ -780,6 +802,7 @@ function bindView(name){
   document.querySelectorAll('[data-stop]').forEach(el=>el.addEventListener('click',e=>e.stopPropagation()));
   document.querySelectorAll('[data-share]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();openShareCard(el.dataset.share);});
   document.querySelectorAll('[data-scope]').forEach(el=>el.onclick=()=>{RANK_SCOPE=el.dataset.scope;render();});
+  document.querySelectorAll('[data-evview]').forEach(el=>el.onclick=()=>{EV_VIEW=el.dataset.evview;render();});
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
   document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
   // map filters (category + genre + feature, stackable)

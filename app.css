@@ -482,3 +482,19 @@ body{
 .lb-vbtn.voted{background:rgba(255,255,255,.12);color:var(--neon);border:1px solid var(--line2)}
 @keyframes votepop{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
 .vc-pop{animation:votepop .4s var(--ease);color:var(--c-pink)!important}
+
+/* ===== scene: two-column waterfall (小红书 style) ===== */
+.waterfall{display:flex;gap:12px;padding:0 20px}
+.wf-col{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+.wf-card{position:relative;border-radius:18px;overflow:hidden;background:#141416 center/cover;cursor:pointer;box-shadow:var(--shadow-soft);transition:transform .2s var(--ease)}
+.wf-card:active{transform:scale(.98)}
+.wf-card::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 8%,transparent 60%)}
+.wf-ov{position:absolute;left:12px;right:12px;bottom:12px;z-index:2}
+.wf-nick{font-size:10.5px;color:rgba(255,255,255,.75);margin-bottom:4px}
+.wf-txt{font-size:13px;color:#fff;font-weight:600;line-height:1.35}
+
+/* ===== events time-axis ===== */
+.axis-seg{margin-bottom:6px}
+.axis-h{display:flex;align-items:center;gap:9px;padding:20px 20px 10px;font-family:"Archivo Black",sans-serif;font-size:17px}
+.axis-h small{font-family:"Archivo",sans-serif;font-size:11px;font-weight:600;color:var(--dim);margin-left:auto}
+.axis-dot{width:9px;height:9px;border-radius:50%;background:var(--neon);box-shadow:0 0 10px var(--neon)}
