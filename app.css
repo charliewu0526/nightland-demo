@@ -425,3 +425,23 @@ body{
 .matrix i{aspect-ratio:1;border-radius:3px;background:var(--card2)}
 .matrix i.on{background:var(--c-lime)}
 .matrix i.hi{background:var(--c-pink)}
+
+/* ===== map bottom-sheet (Airbnb/高德 style) ===== */
+.mapstage{position:relative;height:calc(806px - 44px - 150px);min-height:380px;overflow:hidden}
+@media(max-width:430px){.mapstage{height:calc(100vh - 44px - 150px)}}
+.mapstage .parkmap{position:absolute;inset:0;width:100%;height:100%;
+  background:radial-gradient(120% 90% at 50% 12%,#161226,#000 72%)}
+.mapsheet{position:absolute;left:0;right:0;bottom:0;height:46%;z-index:20;
+  background:rgba(14,12,20,.92);backdrop-filter:var(--glass);border:1px solid var(--line2);
+  border-bottom:0;border-radius:24px 24px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;transition:height .32s var(--ease);touch-action:none}
+.mapsheet.mid{height:46%}
+.mapsheet.full{height:calc(100% - 8px)}
+.mapsheet.min{height:88px}
+.ms-grip{padding:10px 0 4px;display:flex;justify-content:center;cursor:grab;flex:0 0 auto}
+.ms-grip i{width:40px;height:5px;border-radius:999px;background:rgba(255,255,255,.28)}
+.ms-head{padding:2px 20px 12px;font-size:13px;color:var(--sub);flex:0 0 auto}
+.ms-head b{color:var(--neon);font-family:"Archivo Black",sans-serif;font-size:15px}
+.ms-list{flex:1;overflow-y:auto;padding:0 20px;scrollbar-width:none;display:flex;flex-direction:column;gap:14px}
+.ms-list::-webkit-scrollbar{display:none}
+.ms-list .spot{height:150px}

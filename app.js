@@ -389,14 +389,16 @@ routes.map=()=>{
     </div>
     <div class="filt-note">特色标签由真实点评分析得出 · 冷启动持续扩充</div></div>
   </div>
-  <div class="mapwrap" style="height:320px"><div class="parkmap" id="parkmap">
+  <div class="mapstage"><div class="parkmap" id="parkmap">
     ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${esc(z.name.split('·')[1]||z.name)}</div>`).join('')}
     <div class="maptip" id="maptip"></div>
-  </div></div>
-  <div class="mapcount">${activeCount?activeCount+' 个筛选 · ':''}点亮的是已收录场所 · 点开查看详情、一键导航</div>
-  <div class="sect"><div class="t" style="font-size:17px"><small>List</small>符合条件的场子</div></div>
-  <div class="cardlist">${byNearest(fb).slice(0,8).map(nearCard).join('')||'<div style="color:var(--dim);padding:14px">换个筛选试试</div>'}</div>
-  <div style="height:110px"></div>`;
+  </div>
+  <div class="mapsheet" id="mapsheet">
+    <div class="ms-grip" id="ms-grip"><i></i></div>
+    <div class="ms-head">附近 <b>${fb.length}</b> 家 · 离你最近优先${activeCount?' · '+activeCount+' 筛选':''}</div>
+    <div class="ms-list">${byNearest(fb).map(nearCard).join('')||'<div style="color:var(--dim);padding:14px">换个筛选试试</div>'}
+      <div style="height:120px"></div></div>
+  </div></div>`;
 };
 function nearCard(b){
   return `<div class="spot" style="height:180px;background-image:url('${cover(b)}')" data-spot="${b.id}">
@@ -745,6 +747,25 @@ function bindView(name){
   const qr=$('#quiz-retry'); if(qr) qr.onclick=()=>{QZ.step=0;QZ.ans={};render();};
   // park map dots (home + map both have #parkmap)
   if(name==='home'||name==='map'){renderDots();}
+  // map bottom-sheet drag (Airbnb/高德 style, 3 snaps)
+  if(name==='map') bindMapSheet();
+}
+function bindMapSheet(){
+  const sheet=$('#mapsheet'),grip=$('#ms-grip');if(!sheet||!grip)return;
+  const stage=sheet.parentElement;const snaps=['min','mid','full'];let idx=1; // start mid
+  const setSnap=i=>{idx=Math.max(0,Math.min(2,i));sheet.className='mapsheet '+snaps[idx];};
+  let startY=0,startH=0,dragging=false;
+  const onDown=e=>{dragging=true;startY=(e.touches?e.touches[0].clientY:e.clientY);
+    startH=sheet.getBoundingClientRect().height;sheet.style.transition='none';grip.style.cursor='grabbing';};
+  const onMove=e=>{if(!dragging)return;const y=(e.touches?e.touches[0].clientY:e.clientY);
+    const dh=startH+(startY-y);const max=stage.getBoundingClientRect().height-8;
+    sheet.style.height=Math.max(88,Math.min(max,dh))+'px';};
+  const onUp=()=>{if(!dragging)return;dragging=false;sheet.style.transition='';grip.style.cursor='grab';
+    const h=sheet.getBoundingClientRect().height,H=stage.getBoundingClientRect().height;
+    const r=h/H; sheet.style.height=''; setSnap(r<0.28?0:r<0.7?1:2);};
+  grip.addEventListener('mousedown',onDown);document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  grip.addEventListener('touchstart',onDown,{passive:true});document.addEventListener('touchmove',onMove,{passive:true});document.addEventListener('touchend',onUp);
+  grip.addEventListener('click',()=>setSnap(idx===2?1:idx+1)); // tap grip cycles up
 }
 function renderDots(){
   const pm=$('#parkmap'); if(!pm) return;
