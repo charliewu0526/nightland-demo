@@ -9,6 +9,42 @@ const GCOLOR = {Techno:'#5B3DF5',House:'#5B3DF5',Disco:'#FF4D6D',EDM:'#5B3DF5',
 const VOTES = Object.assign({}, D.votes||{});
 const MYVOTED = {};
 
+/* ---- user session: persona (from quiz) + current location ---- */
+const PROFILES={ // 商圈中心点(GCJ-02真实坐标) — 可切换的模拟定位
+  '静安寺商圈':[31.2245,121.4450],'外滩商圈':[31.2390,121.4900],
+  '徐家汇商圈':[31.1940,121.4370],'五角场/大学路':[31.3036,121.5140],
+  '新天地/马当路':[31.2200,121.4750],'陆家嘴商圈':[31.2370,121.5050]};
+const USER={
+  done:false,                 // 是否完成今夜人格问卷
+  persona:null,               // {label, genre, social, energy, budget}
+  loc:'静安寺商圈',           // 当前位置(默认静安寺)
+  ll:[31.2245,121.4450],
+};
+try{const s=JSON.parse(localStorage.getItem('tonight_user')||'null');if(s)Object.assign(USER,s);}catch(e){}
+function saveUser(){try{localStorage.setItem('tonight_user',JSON.stringify(USER));}catch(e){}}
+function setLoc(name){USER.loc=name;USER.ll=PROFILES[name]||USER.ll;saveUser();}
+/* Haversine — 真实距离(km) */
+function distKm(ll){
+  if(!ll||!USER.ll) return null;
+  const R=6371,[la1,lo1]=USER.ll,[la2,lo2]=ll;
+  const dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function distLabel(b){const d=distKm(b.ll);if(d==null)return'';
+  if(d<1)return Math.round(d*1000)+'m · 步行'+Math.max(1,Math.round(d*1000/75))+'分钟';
+  return d.toFixed(1)+'km';}
+function byNearest(list){return [...list].sort((a,b)=>(distKm(a.ll)??999)-(distKm(b.ll)??999));}
+/* persona-aware match: blend music-match + social fit */
+function personaScore(b){
+  let s=b.match||50;
+  if(USER.persona){
+    const g=USER.persona.genre;
+    if(g&&(b.dna||[]).some(x=>x.genre===g)) s+=25;
+  }
+  return Math.min(99,s);
+}
+
 /* ---- helpers ---- */
 const $ = (s,r=document)=>r.querySelector(s);
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -45,10 +81,11 @@ function radar(dna,size=150){
 const routes={};
 function go(h){location.hash=h;}
 function render(){
-  const h=(location.hash||'#home').slice(1);const [name,arg]=h.split('/');
+  let h=(location.hash||'#home').slice(1);let [name,arg]=h.split('/');
+  // 问卷为可选入口(不强制拦截开屏 — 投资人/新用户可直接进首页)
   const fn=routes[name]||routes.home;app.scrollTop=0;
   app.innerHTML=`<div class="view">${fn(arg)}</div>`;
-  const tabFor={home:'home',spot:'home',event:'home',events:'home',note:'home',rank:'rank',crew:'crew',passport:'passport'}[name]||'home';
+  const tabFor={home:'home',spot:'home',map:'home',rank:'home',quiz:'home',event:'events',events:'events',note:'events',scene:'events',crew:'crew',passport:'passport'}[name]||'home';
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.route===tabFor));
   bindView(name);
 }
@@ -71,9 +108,27 @@ function zoneFor(region){
 }
 
 /* ================= HOME (首页: 乐园地图 + 本周活动) ================= */
-/* MAP_FILTER: cat=品类筛选, genre=音乐风格筛选 (可叠加) */
-let MAP_FILTER={cat:'all',genre:'all'};
+/* MAP_FILTER: cat=品类, genre=曲风, feat=特色(可叠加) */
+let MAP_FILTER={cat:'all',genre:'all',feat:'all'};
 let WK_DAY='all';
+/* 每日心情(轻量 2-3 题·结合人格给更准推荐) */
+const MOODQ=[
+  {k:'energy',q:'今晚的能量？',opts:[
+    {v:'high',t:'炸场',feat:'live'},{v:'low',t:'微醺放空',feat:'quiet'}]},
+  {k:'scene',q:'和谁？',opts:[
+    {v:'meet',t:'想认识人',feat:'female'},{v:'crew',t:'和朋友',feat:'live'},{v:'solo',t:'想独处',feat:'quiet'}]},
+  {k:'want',q:'此刻想要？',opts:[
+    {v:'floor',t:'舞池蹦迪',feat:'live'},{v:'terrace',t:'露台聊天',feat:'terrace'},
+    {v:'live',t:'现场音乐',feat:'live'},{v:'calm',t:'安静喝一杯',feat:'quiet'}]},
+];
+let MOOD={}; // {energy,scene,want} 今晚(可选)
+function moodFeats(){ // 当前心情命中的特色集合
+  const s=new Set();
+  MOODQ.forEach(q=>{const a=MOOD[q.k];if(a){const o=q.opts.find(x=>x.v===a);if(o&&o.feat)s.add(o.feat);}});
+  return [...s];
+}
+function moodAnswered(){return MOODQ.some(q=>MOOD[q.k]);}
+function moodLabel(){return MOODQ.map(q=>{const a=MOOD[q.k];const o=a&&q.opts.find(x=>x.v===a);return o?o.t:null;}).filter(Boolean).join(' · ');}
 const TODAY='2026-06-30';
 function barGenres(b){return (b.dna||[]).map(g=>g.genre);}
 function allGenres(){
@@ -81,10 +136,31 @@ function allGenres(){
   return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([g])=>g);
 }
 const GENRE_CN={Techno:'Techno',House:'House',Disco:'Disco',EDM:'电子',HipHop:'嘻哈',Soul:'Soul/R&B',Jazz:'爵士',Pop:'流行',Rock:'摇滚',Folk:'民谣',Latin:'拉丁',Live:'现场'};
+/* 特色标签(从真实点评分析得出;冷启动期规则派生,LAGOM 用真实NLP) */
+const FEATURES=[
+  {k:'terrace',t:'露台',kw:['露台','户外','天台','屋顶']},
+  {k:'female',t:'女生友好',kw:['女生','闺蜜','安全','氛围感']},
+  {k:'nolow',t:'无低消',kw:['无低消','低消','没有最低']},
+  {k:'live',t:'现场音乐',kw:['音乐演出','驻唱','live','乐队','现场']},
+  {k:'quiet',t:'安静聊天',kw:['清吧','聊天','安静','适合聊']},
+  {k:'pet',t:'宠物友好',kw:['宠物','狗','猫']},
+];
+function barFeatures(b){
+  // LAGOM: 用真实 NLP 标签匹配; 其余: 用品类/曲风做规则派生(标注推测)
+  const text=(b.real_data?((b.nlp||[]).map(t=>t.name).join(' ')):'')+' '+(b.tags||[]).join(' ')+' '+(b.category||'');
+  const set=new Set();
+  FEATURES.forEach(f=>{ if(f.kw.some(k=>text.includes(k))) set.add(f.k); });
+  // 规则派生兜底(体现"从评论/品类分析"): 清吧→安静, 特调→女生友好, 精酿/民谣→现场
+  if(b.category&&b.category.includes('清吧')) set.add('quiet');
+  if(b.category&&b.category.includes('特调')) set.add('female');
+  if(b.category&&(b.category.includes('精酿')||b.category.includes('民谣')||b.category.includes('小酒馆'))) set.add('live');
+  return [...set];
+}
 function filteredBars(){
   return D.bars.filter(b=>{
     if(MAP_FILTER.cat!=='all' && b.category!==MAP_FILTER.cat) return false;
     if(MAP_FILTER.genre!=='all' && !barGenres(b).includes(MAP_FILTER.genre)) return false;
+    if(MAP_FILTER.feat!=='all' && !barFeatures(b).includes(MAP_FILTER.feat)) return false;
     return true;
   });
 }
@@ -96,44 +172,73 @@ routes.home=()=>{
   const upcoming=[...D.events].filter(e=>(e.start||'')>=TODAY).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
   const wk = WK_DAY==='all' ? upcoming.slice(0,10) : upcoming.filter(e=>(e.start||'').slice(0,10)===WK_DAY);
   const dayTabs=weekDayTabs(upcoming);
+  // curator picks: 人格×今晚心情 调味
+  const lagom=D.bars.find(b=>b.id==='lagom');
+  const mfeats=moodFeats();
+  let pool=D.bars.filter(b=>b.id!=='lagom');
+  if(mfeats.length){ // 心情命中的特色 → 优先
+    pool=pool.map(b=>{const fs=barFeatures(b);return {b,hit:mfeats.filter(f=>fs.includes(f)).length};})
+      .sort((a,b)=>b.hit-a.hit||(b.b.match||0)-(a.b.match||0)).map(x=>x.b);
+  } else {
+    pool=pool.sort((a,b)=>(b.match||0)-(a.match||0));
+  }
+  const picks=[lagom,pool[0],pool[1]].filter(Boolean);
+  const pickWhy=[
+    '清吧 · 有露台 · 想安静喝一杯聊到天亮',
+    mfeats.length?('今晚想「'+moodLabel()+'」· 为你调过味的推荐'):'今夜对味度最高 · 跟着耳朵走准没错',
+    '人少不踩雷 · 藏在巷子里的好去处',
+  ];
+  // cover: 今夜精选场子(用 LAGOM 真实档案做主角，绕开"今晚无活动"的时效问题)
+  const covBar=lagom||picks[0];
+  const covImg=cover(covBar)||'';
+  const covDist=distLabel(covBar);
   return `
-  <div class="cover">
-    <div class="kicker">Shanghai / After Dark</div>
-    <div class="mast">TO<br>NIGHT</div>
-    <div class="sub">${esc(D.meta.tagline)}</div>
-    <div class="meta">
-      <div><b>${D.meta.bars_count}</b><span>Venues</span></div>
-      <div><b>${D.meta.events_count}</b><span>Events</span></div>
-      <div><b>${(Object.values(VOTES).reduce((a,b)=>a+b,0)/1000).toFixed(1)}K</b><span>Votes</span></div>
+  <div class="home-top">
+    <div><div class="hi">${USER.persona?esc(USER.persona.label):'晚上好，夜猫子'}</div>
+      <div style="font-family:'Archivo Black';font-size:20px;margin-top:2px">今夜 · ${esc((USER.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))}</div></div>
+    <div class="me" data-go="#passport"></div>
+  </div>
+  <div class="pitch">不问预算，先问你听什么。<b>tonight</b> 用音乐口味 + 真实口碑，帮你找到今夜对味的人和场。</div>
+  <div class="mood">
+    <div class="mood-head"><span class="mood-q">今晚想怎样？</span>
+      ${moodAnswered()?`<span class="mood-clear" data-moodclear>重选</span>`:`<span class="mood-hint">10秒，让推荐更准</span>`}</div>
+    ${MOODQ.map(q=>`<div class="mood-row"><span class="mood-lab">${esc(q.q)}</span><div class="mood-chips">
+      ${q.opts.map(o=>`<span class="chip sm ${MOOD[q.k]===o.v?'on':''}" data-moodk="${q.k}" data-moodv="${o.v}">${esc(o.t)}</span>`).join('')}
+    </div></div>`).join('')}
+    ${USER.persona?'':`<div style="margin-top:8px"><span class="chip sm warm" data-go="#quiz">先测今夜人格 →</span></div>`}
+  </div>
+  <div class="search" data-scroll="discover">搜索场所、活动、曲风…</div>
+
+  <div class="cover-hero" style="background-image:url('${covImg}')" data-spot="${covBar.id}">
+    <div class="cap">
+      <div class="day">今夜为你 · ${covBar.real_data?'真实档案':'精选'}</div>
+      <div class="ttl">${esc(covBar.name)}</div>
+      <div class="loc">${esc(covBar.category||'')} · ${esc((covBar.region||'').replace('商圈',''))}${covDist?' · '+covDist:''}</div>
     </div>
   </div>
 
-  <div class="entries">
-    <div class="entry e-map" data-scroll="map"><div class="no">01</div>
-      <div class="et">MAP</div><div class="es">${D.meta.bars_count} 家 · 按音乐风格找店</div><div class="arr">→</div></div>
-    <div class="entry e-ev" data-go="#events"><div class="no">02</div>
-      <div class="et">EVENTS</div><div class="es">${D.meta.events_count} 场 · 按日期浏览</div><div class="arr">→</div></div>
+  <div class="sect" id="discover"><div class="t"><small>Curated for tonight</small>今夜为你选了 ${picks.length} 个</div></div>
+  ${picks.map((b,i)=>`
+    <div class="pick" style="background-image:url('${cover(b)}')" data-spot="${b.id}">
+      <div class="tag">${b.real_data?'真实档案':'AI 精选'}</div>
+      <div class="cap"><div class="nm">${esc(b.name)}</div>
+        <div class="why">${pickWhy[i]||esc(b.region)}</div></div>
+    </div>`).join('')}
+
+  <div class="bento">
+    <div class="b b1" data-go="#map"><div class="bn">EXPLORE</div>
+      <div class="bt">夜上海地图</div><div class="bs">${D.meta.bars_count} 家 · 按音乐风格点亮城市</div></div>
+    <div class="b b2" data-go="#rank"><div class="bn">RANK</div>
+      <div class="bt">今夜风云</div><div class="bs">玩家票选</div></div>
+    <div class="b b3" data-go="#events"><div class="bn">EVENTS</div>
+      <div class="bt">时刻表</div><div class="bs">${D.meta.events_count} 场</div></div>
   </div>
 
-  <div class="slabel" id="map-sec"><div class="st">THE MAP</div><div class="sm" data-go="#rank">榜单 →</div></div>
-  <div class="hscroll">
-    <span class="chip ${MAP_FILTER.cat==='all'?'on':''}" data-mfc="all">全部</span>
-    ${cats.map(c=>`<span class="chip ${MAP_FILTER.cat===c?'on':''}" data-mfc="${esc(c)}">${esc(c)}</span>`).join('')}
+  <div class="concierge" data-toast="正在为你规划今晚：预热 → 主场 → 续摊">
+    <div class="ct">懒得选？让我安排今晚</div>
+    <div class="cs">说出口味 + 人数 + 区域，AI 夜晚管家给你一条完整路线</div>
   </div>
-  <div class="hscroll">
-    <span class="chip c-acc ${MAP_FILTER.genre==='all'?'on':''}" data-mfg="all">全部风格</span>
-    ${genres.map(g=>`<span class="chip c-acc ${MAP_FILTER.genre===g?'on':''}" data-mfg="${g}">${esc(GENRE_CN[g]||g)}</span>`).join('')}
-  </div>
-  <div class="mapwrap"><div class="parkmap" id="parkmap">
-    ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${esc(z.name.split('·')[1]||z.name)}</div>`).join('')}
-    <div class="maptip" id="maptip"></div>
-  </div></div>
-  <div class="mapcount">${fb.length} 家显示中 · 点位查看详情 · 一键导航</div>
-
-  <div class="slabel"><div class="st">THIS WEEK</div><div class="sm" data-go="#events">全部 →</div></div>
-  <div class="hscroll">${dayTabs}</div>
-  <div class="hscroll" id="wkrow" style="gap:14px">${wk.length?wk.map(wkCard).join(''):'<div style="color:var(--grey);padding:14px;font-size:13px">这天暂无活动</div>'}</div>
-  <div style="height:24px"></div>`;
+  <div style="height:110px"></div>`;
 };
 function weekDayTabs(upcoming){
   const days=[...new Set(upcoming.map(e=>(e.start||'').slice(0,10)))].slice(0,6);
@@ -152,6 +257,156 @@ function wkCard(e){
     <div class="t">${esc(e.title)}</div>
     <div class="v">${esc(e.venue||'')}</div></div>`;
 }
+
+/* ================= QUIZ · 今夜人格问卷 (开屏) ================= */
+const QUIZ=[
+  {k:'genre',q:'今晚，耳朵想要什么？',sub:'音乐是第一匹配维度',opts:[
+    {v:'Techno',t:'暗黑电子',d:'Techno / 深夜低频'},
+    {v:'Disco',t:'复古迪斯科',d:'Disco / Funk 律动'},
+    {v:'Jazz',t:'微醺爵士',d:'Jazz / Soul 慢摇'},
+    {v:'Live',t:'现场演出',d:'Live / 乐队'}]},
+  {k:'social',q:'今晚，为了什么出来？',sub:'来夜店，多半是冲着社交',opts:[
+    {v:'meet',t:'想认识新朋友',d:'开放、热闹的场'},
+    {v:'crew',t:'和死党炸场',d:'适合一群人'},
+    {v:'date',t:'约会专属',d:'氛围、私密'},
+    {v:'solo',t:'一个人静静喝',d:'清吧、慢调'}]},
+  {k:'energy',q:'今晚的能量？',sub:'',opts:[
+    {v:'high',t:'蹦到天亮',d:'高能、舞池'},
+    {v:'low',t:'聊到深夜',d:'慵懒、微醺'}]},
+  {k:'budget',q:'今晚的预算氛围？',sub:'',opts:[
+    {v:'fine',t:'精致小酌',d:'品质优先'},
+    {v:'value',t:'性价比畅饮',d:'尽兴就好'}]},
+  {k:'loc',q:'你现在在哪？',sub:'用于推荐附近的好去处',opts:[
+    {v:'静安寺商圈',t:'静安寺',d:'静安 / 南西'},
+    {v:'外滩商圈',t:'外滩',d:'黄浦 / 北外滩'},
+    {v:'徐家汇商圈',t:'徐汇',d:'衡复 / 徐家汇'},
+    {v:'新天地/马当路',t:'新天地',d:'卢湾 / 马当路'}]},
+];
+let QZ={step:0,ans:{}};
+const PERSONA_LABEL={
+  Techno:'深夜 Techno',Disco:'复古 Disco',Jazz:'微醺爵士',Live:'现场派'};
+const SOCIAL_LABEL={meet:'社交家',crew:'团魂',date:'约会咖',solo:'独行客'};
+function buildPersona(){
+  const a=QZ.ans;const label=(PERSONA_LABEL[a.genre]||'夜行')+' '+(SOCIAL_LABEL[a.social]||'玩家');
+  USER.persona={label,genre:a.genre,social:a.social,energy:a.energy,budget:a.budget};
+  setLoc(a.loc||'静安寺商圈');USER.done=true;saveUser();
+}
+routes.quiz=()=>{
+  // result screen
+  if(QZ.step>=QUIZ.length){
+    const a=QZ.ans;const label=(PERSONA_LABEL[a.genre]||'夜行')+' '+(SOCIAL_LABEL[a.social]||'玩家');
+    return `
+    <div class="quiz-wrap result">
+      <div class="kicker" style="text-align:center">Your nightlife persona</div>
+      <div class="persona-big">
+        <div class="pl">今夜的你是</div>
+        <div class="pn">${esc(label)}</div>
+        <div class="ptags">
+          <span>${esc(GENRE_CN[a.genre]||a.genre)}</span>
+          <span>${esc(SOCIAL_LABEL[a.social]||'')}</span>
+          <span>${a.energy==='high'?'蹦到天亮':'聊到深夜'}</span>
+        </div>
+        <div class="ploc">已定位 · ${esc((a.loc||'静安寺商圈').replace('商圈','').replace('/马当路',''))} · 为你锁定附近对味场子</div>
+      </div>
+      <button class="btn warm" id="quiz-done">进入今夜</button>
+      <div class="quiz-skip" id="quiz-retry">重新测一次</div>
+    </div>`;
+  }
+  // question screen
+  const Q=QUIZ[QZ.step];const prog=Math.round((QZ.step)/QUIZ.length*100);
+  return `
+  <div class="quiz-wrap">
+    <div class="quiz-prog"><i style="width:${prog}%"></i></div>
+    <div class="quiz-step">0${QZ.step+1} / 0${QUIZ.length}</div>
+    <div class="quiz-q">${esc(Q.q)}</div>
+    ${Q.sub?`<div class="quiz-sub">${esc(Q.sub)}</div>`:''}
+    <div class="quiz-opts">
+      ${Q.opts.map(o=>`<div class="qopt" data-qk="${Q.k}" data-qv="${o.v}">
+        <div class="qt">${esc(o.t)}</div><div class="qd">${esc(o.d)}</div></div>`).join('')}
+    </div>
+    ${QZ.step>0?`<div class="quiz-skip" id="quiz-back">← 上一题</div>`:`<div class="quiz-skip" id="quiz-skipall">跳过，直接逛</div>`}
+  </div>`;
+};
+
+/* ================= MAP (夜上海) ================= */
+routes.map=()=>{
+  const cats=[...new Set(D.bars.map(b=>b.category))];
+  const genres=allGenres();
+  const fb=filteredBars();
+  const activeCount=[MAP_FILTER.cat,MAP_FILTER.genre,MAP_FILTER.feat].filter(x=>x!=='all').length;
+  return `
+  <div class="cal-hero" style="padding:44px 20px 10px"><div class="kicker">Vibe Map</div>
+    <div class="h1" style="margin-top:8px">夜巡</div>
+    <div class="sub">${esc((USER.loc||'静安寺商圈').replace('商圈',''))}附近 · 按曲风与氛围点亮这座城 · ${fb.length} 家</div></div>
+  <div class="filt">
+    <div class="filt-row"><span class="filt-lab">类型</span><div class="filt-chips">
+      <span class="chip sm ${MAP_FILTER.cat==='all'?'on':''}" data-mfc="all">全部</span>
+      ${cats.map(c=>`<span class="chip sm ${MAP_FILTER.cat===c?'on':''}" data-mfc="${esc(c)}">${esc(c)}</span>`).join('')}
+    </div></div>
+    <div class="filt-row"><span class="filt-lab">曲风</span><div class="filt-chips">
+      <span class="chip sm warm ${MAP_FILTER.genre==='all'?'on':''}" data-mfg="all">全部</span>
+      ${genres.map(g=>`<span class="chip sm warm ${MAP_FILTER.genre===g?'on':''}" data-mfg="${g}">${esc(GENRE_CN[g]||g)}</span>`).join('')}
+    </div></div>
+    <div class="filt-row"><span class="filt-lab">特色</span><div class="filt-chips">
+      <span class="chip sm ${MAP_FILTER.feat==='all'?'on':''}" data-mff="all">全部</span>
+      ${FEATURES.map(f=>`<span class="chip sm ${MAP_FILTER.feat===f.k?'on':''}" data-mff="${f.k}">${esc(f.t)}</span>`).join('')}
+    </div>
+    <div class="filt-note">特色标签由真实点评分析得出 · 冷启动持续扩充</div></div>
+  </div>
+  <div class="mapwrap" style="height:320px"><div class="parkmap" id="parkmap">
+    ${ZONES.map(z=>`<div class="zone" style="left:${z.x}%;top:${z.y-10}%;transform:translateX(-50%)">${esc(z.name.split('·')[1]||z.name)}</div>`).join('')}
+    <div class="maptip" id="maptip"></div>
+  </div></div>
+  <div class="mapcount">${activeCount?activeCount+' 个筛选 · ':''}点亮的是已收录场所 · 点开查看详情、一键导航</div>
+  <div class="sect"><div class="t" style="font-size:17px"><small>List</small>符合条件的场子</div></div>
+  <div class="cardlist">${byNearest(fb).slice(0,8).map(nearCard).join('')||'<div style="color:var(--dim);padding:14px">换个筛选试试</div>'}</div>
+  <div style="height:110px"></div>`;
+};
+function nearCard(b){
+  return `<div class="spot" style="height:180px;background-image:url('${cover(b)}')" data-spot="${b.id}">
+    <div class="badge">${distLabel(b)||esc(b.region.replace('商圈',''))}</div>
+    <div class="ov"><div class="nm" style="font-size:18px">${esc(b.name)}</div>
+      <div class="meta" style="color:#fff">${esc(b.category)} · ${barFeatures(b).slice(0,2).map(k=>{const f=FEATURES.find(x=>x.k===k);return f?f.t:'';}).filter(Boolean).join(' · ')||esc((b.region||'').replace('商圈',''))}</div></div></div>`;
+}
+
+/* ================= SCENE · AFTERGLOW (社区) ================= */
+routes.scene=()=>{
+  // curated 造夜人手记 from real posts (re-styled, not raw 小红书)
+  const editor=D.posts[0];
+  // vibe slices seeded from real bars (photo-first, one-line vibe)
+  const vibes=[
+    {b:D.bars.find(x=>x.id==='lagom'),txt:'露台风很轻，杯子里是一抹清幽。'},
+    {b:D.bars.filter(x=>x.id!=='lagom')[2],txt:'低频压到胸口，今晚不想回家。'},
+    {b:D.bars.filter(x=>x.id!=='lagom')[5],txt:'霓虹打在脸上，谁还看时间。'},
+  ].filter(v=>v.b);
+  const friends=D.seed.friends_online;
+  return `
+  <div class="cal-hero" style="padding:44px 20px 8px"><div class="kicker">Afterglow</div>
+    <div class="h1" style="margin-top:8px">余温</div>
+    <div class="sub">晒今晚的 vibe · 沉淀你的夜 · 看造夜人怎么玩</div></div>
+
+  <div class="stories">
+    <div class="story"><div class="ring"><i style="background-image:url('${cover(vibes[0]&&vibes[0].b||D.bars[1])}')"></i><span class="live"></span></div><div class="nm">我的现场</div></div>
+    ${friends.map(f=>`<div class="story"><div class="ring"><i></i>${f.spot?'<span class="live"></span>':''}</div><div class="nm">${esc(f.nick)}</div></div>`).join('')}
+  </div>
+
+  <div class="sect"><div class="t"><small>Editor's pick</small>造夜人手记</div></div>
+  <div class="pick" style="background-image:url('${(editor.images&&editor.images[0])||''}')" data-note="${editor.id}">
+    <div class="tag">造夜人 @${esc(editor.author||'')}</div>
+    <div class="cap"><div class="nm" style="font-size:19px">${esc(editor.title)}</div>
+      <div class="why">经 tonight 编辑精选 · 点开看完整手记</div></div>
+  </div>
+
+  <div class="sect"><div class="t"><small>Vibe check</small>今夜现场</div></div>
+  <div class="cardlist">
+    ${vibes.map(v=>`<div class="spot" style="height:200px;background-image:url('${cover(v.b)}')" data-spot="${v.b.id}">
+      <div class="badge">${esc(v.b.region)}</div>
+      <div class="ov"><div class="nm" style="font-size:17px">${esc(v.b.name)}</div>
+        <div class="meta" style="font-size:13px;color:#fff">${esc(v.txt)}</div></div></div>`).join('')}
+  </div>
+  <div class="prov" style="margin:8px 20px">现场 vibe 与手记为氛围演示；评测原始数据退至后台，仅作口碑标签与选品洞察</div>
+  <div style="height:110px"></div>`;
+};
 
 /* ================= RANK (实时投票榜 + 评价) ================= */
 routes.rank=()=>{
@@ -410,9 +665,15 @@ function bindView(name){
   document.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
   document.querySelectorAll('[data-toast]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();toast(el.dataset.toast);});
   document.querySelectorAll('[data-nav]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();navTo(el.dataset.nav);});
-  // map filters (category + genre, stackable) — re-render only dots+filters
+  document.querySelectorAll('[data-scroll]').forEach(el=>el.onclick=()=>{const t=$('#'+el.dataset.scroll);if(t)t.scrollIntoView({behavior:'smooth'});else go('#map');});
+  // map filters (category + genre + feature, stackable)
   document.querySelectorAll('[data-mfc]').forEach(el=>el.onclick=()=>{MAP_FILTER.cat=el.dataset.mfc;render();});
   document.querySelectorAll('[data-mfg]').forEach(el=>el.onclick=()=>{MAP_FILTER.genre=el.dataset.mfg;render();});
+  document.querySelectorAll('[data-mff]').forEach(el=>el.onclick=()=>{MAP_FILTER.feat=el.dataset.mff;render();});
+  // daily mood (3 quick questions) → re-rank picks
+  document.querySelectorAll('[data-moodk]').forEach(el=>el.onclick=()=>{
+    const k=el.dataset.moodk;MOOD[k]=(MOOD[k]===el.dataset.moodv)?undefined:el.dataset.moodv;render();});
+  const mc=$('[data-moodclear]'); if(mc) mc.onclick=()=>{MOOD={};render();};
   // week day tabs
   document.querySelectorAll('[data-wd]').forEach(el=>el.onclick=()=>{WK_DAY=el.dataset.wd;render();});
   // clickable atmosphere tag -> scroll to linked reviews
