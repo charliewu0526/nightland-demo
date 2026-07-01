@@ -461,7 +461,8 @@ routes.search=()=>{
 routes.route=()=>{
   const near=byNearest(D.bars.filter(b=>b.id!=='lagom'));
   const warm=D.bars.find(b=>b.id==='lagom')||near[0];         // 预热:清吧/近
-  const main=[...D.bars].sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0))[0]; // 主场:人气
+  // 主场:人气最高但不等于预热店
+  const main=[...D.bars].filter(b=>b.id!==warm.id).sort((a,b)=>(VOTES[b.id]||0)-(VOTES[a.id]||0))[0];
   const ev=D.events[0];
   const after=near.find(b=>b.id!==warm.id&&b.id!==main.id)||near[1]||near[0];
   const p=USER.persona;

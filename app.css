@@ -39,12 +39,6 @@ body{
 .view{animation:viewin .4s var(--ease)}
 @keyframes viewin{from{opacity:0;transform:translateY(14px) scale(.99)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-/* image skeleton shimmer for bg-image cards */
-.cover-hero,.pick,.spot,.ev-card .ph,.wf-card,.pod,.rt-card,.note-card .ph,.lb-thumb,.dt-hero{position:relative}
-.cover-hero::before,.pick::before,.wf-card::before,.pod::before,.rt-card::before{
-  content:"";position:absolute;inset:0;z-index:0;
-  background:linear-gradient(100deg,#1a1820 30%,#26232e 50%,#1a1820 70%);background-size:200% 100%;
-  animation:shim 1.3s ease-in-out infinite}
 @keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* floating capsule tab bar */
